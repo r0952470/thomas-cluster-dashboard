@@ -1186,7 +1186,7 @@ export default function App() {
                 className="rounded-xl border border-zinc-700 bg-black px-4 py-2 text-sm text-white outline-none focus:border-cyan-500"
               >
                 <option value="">Selecteer model</option>
-                {[...new Set([...openclawOllama.modelNames, ...ollamaModels])].map((m) => (
+                {[...new Set([...(openclawOllama.modelNames || []), ...(ollamaModels || [])])].map((m) => (
                   <option key={m} value={m}>{m}</option>
                 ))}
               </select>
@@ -1252,10 +1252,10 @@ export default function App() {
                   {/* Skill toewijzing */}
                   <div className="mb-3">
                     <div className="mb-2 flex flex-wrap gap-2">
-                      {agent.skills.length === 0 ? (
+                      {(agent.skills || []).length === 0 ? (
                         <span className="text-xs text-zinc-600">Geen skills toegewezen</span>
                       ) : (
-                        agent.skills.map((sid) => {
+                        (agent.skills || []).map((sid) => {
                           const sk = skills.find((s) => s.id === sid)
                           return sk ? (
                             <span key={sid} className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-black px-2 py-1 text-xs text-white">
@@ -1274,8 +1274,8 @@ export default function App() {
                     <div className="flex gap-2">
                       <AgentSkillSelect
                         agentId={agent.id}
-                        agentSkills={agent.skills}
-                        allSkills={skills}
+                        agentSkills={agent.skills || []}
+                        allSkills={skills || []}
                         onAssign={assignSkill}
                       />
                     </div>
@@ -1475,7 +1475,7 @@ export default function App() {
 function AgentSkillSelect({ agentId, agentSkills, allSkills, onAssign }) {
   const [selected, setSelected] = useState('')
 
-  const available = allSkills.filter((s) => !agentSkills.includes(s.id))
+  const available = (allSkills || []).filter((s) => !(agentSkills || []).includes(s.id))
 
   const handleChange = (e) => {
     const skillId = e.target.value
