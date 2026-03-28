@@ -10,7 +10,7 @@ const pty = require('node-pty')
 const { Client } = require('ssh2')
 
 const app = express()
-const PORT = 3001
+const PORT = Number(process.env.PORT || 3001)
 
 app.use(cors())
 app.use(express.json())
@@ -910,6 +910,14 @@ wss.on('connection', (ws, req) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🔥 Cluster backend + terminal draait op http://0.0.0.0:${PORT}`)
 })
+
+server.on('error', (err) => {
+  console.error('[SERVER] Fout bij starten van de backend:', err.message)
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[SERVER] Poort ${PORT} is al in gebruik. Gebruik een andere PORT in .env of stop het proces dat deze poort bezet.`)
+  }
+})
+
 app.post('/api/ollama/generate', async (req, res) => {
   try {
     const { prompt } = req.body || {}
