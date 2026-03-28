@@ -38,6 +38,10 @@ const NODES = [
 
 let currentOllamaModel = ''
 
+// In-memory opslag voor OpenClaw agents en skills
+const openclawAgents = []
+const openclawSkills = []
+
 function findNode(name) {
   return NODES.find((node) => node.name.toLowerCase() === name.toLowerCase())
 }
@@ -594,6 +598,13 @@ app.post('/api/openclaw/execute', async (req, res) => {
       /^curl/,
       /^ping/,
       /^ollama/,
+      /^python3/,
+      /^cat\s/,
+      /^tail\s/,
+      /^kill\s/,
+      /^nohup\s/,
+      /^mkdir\s/,
+      /^tee\s/,
     ]
 
     const isAllowed = allowedPatterns.some((pattern) => pattern.test(command))
@@ -601,7 +612,7 @@ app.post('/api/openclaw/execute', async (req, res) => {
     if (!isAllowed) {
       return res.status(403).json({
         ok: false,
-        error: `Command niet toegestaan. Allowed: ls, pwd, whoami, uptime, free, df, ps, systemctl status, docker ps, ollama, curl, ping`,
+        error: `Command niet toegestaan. Allowed: ls, pwd, whoami, uptime, free, df, ps, systemctl status, docker ps, ollama, curl, ping, python3, cat, tail, kill, nohup, mkdir, tee`,
       })
     }
 
@@ -620,6 +631,242 @@ app.post('/api/openclaw/execute', async (req, res) => {
       ok: false,
       error: `Command execution failed: ${error.message}`,
     })
+  }
+})
+
+// ----------------------
+// OpenClaw Agents endpoints
+// ----------------------
+
+app.get('/api/openclaw/agents', async (req, res) => {
+  try {
+    // Haal running status op via SSH
+    let runningPids = {}
+    try {
+      const psResult = await executeSSHCommand('ps aux | grep agent')
+      const lines = psResult.stdout.split('\n').filter((l) => l.includes('run.py'))
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/)
+        const pid = parts[1]
+        const cmdParts = line.match(/\/opt\/openclaw\/agents\/([^/]+)\/run\.py/)
+        if (cmdParts && cmdParts[1]) {
+          runningPids[cmdParts[1]] = pid
+        }
+      }
+    } catch {
+      // SSH niet beschikbaar, status blijft 'stopped'
+    }
+
+    const agentsWithStatus = openclawAgents.map((agent) => ({
+      ...agent,
+      status: runningPids[agent.name] ? 'running' : 'stopped',
+      pid: runningPids[agent.name] || null,
+    }))
+
+    res.json({ ok: true, agents: agentsWithStatus })
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message })
+  }
+})
+
+app.post('/api/openclaw/agents', (req, res) => {
+  const { name, description, model, skills } = req.body || {}
+
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ ok: false, error: 'Agent naam is verplicht' })
+  }
+
+  // Valideer naam: alleen alfanumeriek, underscores en koppeltekens (veiligheid SSH commandos)
+  const safeName = name.trim()
+  if (!/^[a-zA-Z0-9_-]+$/.test(safeName)) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Agent naam mag alleen letters, cijfers, underscores en koppeltekens bevatten',
+    })
+  }
+
+  const agent = {
+    id: crypto.randomUUID(),
+    name: safeName,
+    description: description || '',
+    model: model || '',
+    skills: Array.isArray(skills) ? skills : [],
+    createdAt: new Date().toISOString(),
+  }
+
+  openclawAgents.push(agent)
+  console.log(`[OPENCLAW] Agent aangemaakt: ${agent.name} (${agent.id})`)
+  res.status(201).json({ ok: true, agent })
+})
+
+app.post('/api/openclaw/agents/:id/start', async (req, res) => {
+  const agent = openclawAgents.find((a) => a.id === req.params.id)
+  if (!agent) return res.status(404).json({ ok: false, error: 'Agent niet gevonden' })
+
+  try {
+    await executeSSHCommand(`mkdir -p /opt/openclaw/agents/${agent.name}`)
+    const startCmd = `nohup python3 /opt/openclaw/agents/${agent.name}/run.py > /opt/openclaw/agents/${agent.name}/agent.log 2>&1 &`
+    await executeSSHCommand(startCmd)
+    console.log(`[OPENCLAW] Agent gestart: ${agent.name}`)
+    res.json({ ok: true, message: `Agent ${agent.name} gestart` })
+  } catch (error) {
+    res.status(500).json({ ok: false, error: `Kon agent niet starten: ${error.message}` })
+  }
+})
+
+app.post('/api/openclaw/agents/:id/stop', async (req, res) => {
+  const agent = openclawAgents.find((a) => a.id === req.params.id)
+  if (!agent) return res.status(404).json({ ok: false, error: 'Agent niet gevonden' })
+
+  try {
+    const pidResult = await executeSSHCommand(
+      `ps aux | grep "/opt/openclaw/agents/${agent.name}/run.py" | grep -v grep | awk '{print $2}'`
+    )
+    const pid = pidResult.stdout.trim()
+
+    if (pid) {
+      await executeSSHCommand(`kill ${pid}`)
+      console.log(`[OPENCLAW] Agent gestopt: ${agent.name} (PID ${pid})`)
+      res.json({ ok: true, message: `Agent ${agent.name} gestopt (PID ${pid})` })
+    } else {
+      res.json({ ok: true, message: `Agent ${agent.name} was niet actief` })
+    }
+  } catch (error) {
+    res.status(500).json({ ok: false, error: `Kon agent niet stoppen: ${error.message}` })
+  }
+})
+
+app.delete('/api/openclaw/agents/:id', (req, res) => {
+  const index = openclawAgents.findIndex((a) => a.id === req.params.id)
+  if (index === -1) return res.status(404).json({ ok: false, error: 'Agent niet gevonden' })
+
+  const [removed] = openclawAgents.splice(index, 1)
+  console.log(`[OPENCLAW] Agent verwijderd: ${removed.name}`)
+  res.json({ ok: true, message: `Agent ${removed.name} verwijderd` })
+})
+
+app.get('/api/openclaw/agents/:id/logs', async (req, res) => {
+  const agent = openclawAgents.find((a) => a.id === req.params.id)
+  if (!agent) return res.status(404).json({ ok: false, error: 'Agent niet gevonden' })
+
+  try {
+    const result = await executeSSHCommand(
+      `tail -50 /opt/openclaw/agents/${agent.name}/agent.log`
+    )
+    res.json({ ok: true, logs: result.stdout || '(geen logs beschikbaar)' })
+  } catch (error) {
+    res.json({ ok: true, logs: `(log bestand niet gevonden: ${error.message})` })
+  }
+})
+
+app.post('/api/openclaw/agents/:id/skills', (req, res) => {
+  const agent = openclawAgents.find((a) => a.id === req.params.id)
+  if (!agent) return res.status(404).json({ ok: false, error: 'Agent niet gevonden' })
+
+  const { skillId } = req.body || {}
+  if (!skillId) return res.status(400).json({ ok: false, error: 'skillId is verplicht' })
+
+  const skill = openclawSkills.find((s) => s.id === skillId)
+  if (!skill) return res.status(404).json({ ok: false, error: 'Skill niet gevonden' })
+
+  if (!agent.skills.includes(skillId)) {
+    agent.skills.push(skillId)
+  }
+
+  res.json({ ok: true, message: `Skill ${skill.name} toegewezen aan ${agent.name}`, agent })
+})
+
+app.delete('/api/openclaw/agents/:id/skills/:skillId', (req, res) => {
+  const agent = openclawAgents.find((a) => a.id === req.params.id)
+  if (!agent) return res.status(404).json({ ok: false, error: 'Agent niet gevonden' })
+
+  agent.skills = agent.skills.filter((s) => s !== req.params.skillId)
+  res.json({ ok: true, message: 'Skill verwijderd van agent', agent })
+})
+
+// ----------------------
+// OpenClaw Skills endpoints
+// ----------------------
+
+app.get('/api/openclaw/skills', (req, res) => {
+  res.json({ ok: true, skills: openclawSkills })
+})
+
+app.post('/api/openclaw/skills', (req, res) => {
+  const { name, description, type, code } = req.body || {}
+
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ ok: false, error: 'Skill naam is verplicht' })
+  }
+
+  const allowedTypes = ['prompt', 'script', 'api-call']
+  const skillType = allowedTypes.includes(type) ? type : 'prompt'
+
+  const skill = {
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    description: description || '',
+    type: skillType,
+    code: code || '',
+    createdAt: new Date().toISOString(),
+  }
+
+  openclawSkills.push(skill)
+  console.log(`[OPENCLAW] Skill aangemaakt: ${skill.name} (${skill.id})`)
+  res.status(201).json({ ok: true, skill })
+})
+
+app.put('/api/openclaw/skills/:id', (req, res) => {
+  const skill = openclawSkills.find((s) => s.id === req.params.id)
+  if (!skill) return res.status(404).json({ ok: false, error: 'Skill niet gevonden' })
+
+  const { name, description, type, code } = req.body || {}
+  const allowedTypes = ['prompt', 'script', 'api-call']
+
+  if (name && typeof name === 'string') skill.name = name.trim()
+  if (description !== undefined) skill.description = description
+  if (type && allowedTypes.includes(type)) skill.type = type
+  if (code !== undefined) skill.code = code
+  skill.updatedAt = new Date().toISOString()
+
+  res.json({ ok: true, skill })
+})
+
+app.delete('/api/openclaw/skills/:id', (req, res) => {
+  const index = openclawSkills.findIndex((s) => s.id === req.params.id)
+  if (index === -1) return res.status(404).json({ ok: false, error: 'Skill niet gevonden' })
+
+  const [removed] = openclawSkills.splice(index, 1)
+
+  // Verwijder ook van alle agents
+  for (const agent of openclawAgents) {
+    agent.skills = agent.skills.filter((s) => s !== req.params.id)
+  }
+
+  console.log(`[OPENCLAW] Skill verwijderd: ${removed.name}`)
+  res.json({ ok: true, message: `Skill ${removed.name} verwijderd` })
+})
+
+app.post('/api/openclaw/skills/:id/test', async (req, res) => {
+  const skill = openclawSkills.find((s) => s.id === req.params.id)
+  if (!skill) return res.status(404).json({ ok: false, error: 'Skill niet gevonden' })
+
+  try {
+    let output = ''
+
+    if (skill.type === 'script') {
+      output = `[SCRIPT SKILL PREVIEW]\nNaam: ${skill.name}\n\nCode:\n${skill.code || '(leeg)'}\n\n(SSH uitvoering is beschikbaar via de terminal)`
+    } else if (skill.type === 'prompt') {
+      output = `[PROMPT SKILL] Code:\n${skill.code || '(leeg)'}\n\n(Verzend naar Ollama voor echte uitvoer)`
+    } else if (skill.type === 'api-call') {
+      output = `[API-CALL SKILL] Code:\n${skill.code || '(leeg)'}\n\n(API-call simulatie)`
+    } else {
+      output = skill.code || '(geen code)'
+    }
+
+    res.json({ ok: true, output })
+  } catch (error) {
+    res.status(500).json({ ok: false, error: `Skill test mislukt: ${error.message}` })
   }
 })
 

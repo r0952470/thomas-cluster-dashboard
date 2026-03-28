@@ -48,6 +48,13 @@ export default function App() {
     modelNames: [],
   })
 
+  const [agents, setAgents] = useState([])
+  const [skills, setSkills] = useState([])
+  const [agentForm, setAgentForm] = useState({ name: '', description: '', model: '', skills: [] })
+  const [skillForm, setSkillForm] = useState({ name: '', description: '', type: 'prompt', code: '' })
+  const [editingSkill, setEditingSkill] = useState(null)
+  const [agentLogs, setAgentLogs] = useState({})
+
   const addLog = (line) => {
     setLogs((prev) => [line, ...prev].slice(0, 40))
   }
@@ -62,6 +69,8 @@ export default function App() {
     cluster: true,
     ai: false,
     terminals: false,
+    agents: false,
+    skills: false,
   })
 
   const toggleSection = (name) => {
@@ -208,6 +217,8 @@ export default function App() {
       fetchClusterStatus(),
       fetchOllamaDashboard(true),
       fetchOpenclawDashboard(true),
+      fetchAgents(true),
+      fetchSkills(true),
     ])
   }
 
@@ -446,6 +457,235 @@ export default function App() {
     }
   }
 
+  const fetchAgents = async (silent = false) => {
+    try {
+      if (!silent) addLog('[WAIT] Agents ophalen...')
+      const res = await fetch('http://0.0.0.0:3001/api/openclaw/agents')
+      const data = await res.json()
+      if (data.ok) setAgents(data.agents || [])
+      if (!silent) addLog('[OK] Agents vernieuwd')
+    } catch (error) {
+      if (!silent) addLog(`[ERROR] Agents ophalen: ${error.message}`)
+    }
+  }
+
+  const fetchSkills = async (silent = false) => {
+    try {
+      if (!silent) addLog('[WAIT] Skills ophalen...')
+      const res = await fetch('http://0.0.0.0:3001/api/openclaw/skills')
+      const data = await res.json()
+      if (data.ok) setSkills(data.skills || [])
+      if (!silent) addLog('[OK] Skills vernieuwd')
+    } catch (error) {
+      if (!silent) addLog(`[ERROR] Skills ophalen: ${error.message}`)
+    }
+  }
+
+  const createAgent = async () => {
+    if (!agentForm.name.trim()) return
+    const key = 'create-agent'
+    try {
+      setBusy(key, true)
+      addLog(`[WAIT] Agent aanmaken: ${agentForm.name}...`)
+      const res = await fetch('http://0.0.0.0:3001/api/openclaw/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(agentForm),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Aanmaken mislukt')
+      addLog(`[OK] Agent aangemaakt: ${agentForm.name}`)
+      setAgentForm({ name: '', description: '', model: '', skills: [] })
+      await fetchAgents(true)
+    } catch (error) {
+      addLog(`[ERROR] Agent aanmaken: ${error.message}`)
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const startAgent = async (id) => {
+    const key = `start-agent-${id}`
+    try {
+      setBusy(key, true)
+      const res = await fetch(`http://0.0.0.0:3001/api/openclaw/agents/${id}/start`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Start mislukt')
+      addLog(`[OK] ${data.message}`)
+      await fetchAgents(true)
+    } catch (error) {
+      addLog(`[ERROR] Agent starten: ${error.message}`)
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const stopAgent = async (id) => {
+    const key = `stop-agent-${id}`
+    try {
+      setBusy(key, true)
+      const res = await fetch(`http://0.0.0.0:3001/api/openclaw/agents/${id}/stop`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Stop mislukt')
+      addLog(`[OK] ${data.message}`)
+      await fetchAgents(true)
+    } catch (error) {
+      addLog(`[ERROR] Agent stoppen: ${error.message}`)
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const deleteAgent = async (id) => {
+    const key = `delete-agent-${id}`
+    try {
+      setBusy(key, true)
+      const res = await fetch(`http://0.0.0.0:3001/api/openclaw/agents/${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Verwijderen mislukt')
+      addLog(`[OK] ${data.message}`)
+      await fetchAgents(true)
+    } catch (error) {
+      addLog(`[ERROR] Agent verwijderen: ${error.message}`)
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const viewAgentLogs = async (id) => {
+    const key = `logs-agent-${id}`
+    try {
+      setBusy(key, true)
+      const res = await fetch(`http://0.0.0.0:3001/api/openclaw/agents/${id}/logs`)
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Logs ophalen mislukt')
+      setAgentLogs((prev) => ({ ...prev, [id]: data.logs }))
+    } catch (error) {
+      setAgentLogs((prev) => ({ ...prev, [id]: `[ERROR] ${error.message}` }))
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const createSkill = async () => {
+    if (!skillForm.name.trim()) return
+    const key = 'create-skill'
+    try {
+      setBusy(key, true)
+      addLog(`[WAIT] Skill aanmaken: ${skillForm.name}...`)
+      const res = await fetch('http://0.0.0.0:3001/api/openclaw/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(skillForm),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Aanmaken mislukt')
+      addLog(`[OK] Skill aangemaakt: ${skillForm.name}`)
+      setSkillForm({ name: '', description: '', type: 'prompt', code: '' })
+      await fetchSkills(true)
+    } catch (error) {
+      addLog(`[ERROR] Skill aanmaken: ${error.message}`)
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const updateSkill = async (id) => {
+    const key = `update-skill-${id}`
+    try {
+      setBusy(key, true)
+      addLog(`[WAIT] Skill bijwerken...`)
+      const res = await fetch(`http://0.0.0.0:3001/api/openclaw/skills/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingSkill),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Update mislukt')
+      addLog(`[OK] Skill bijgewerkt`)
+      setEditingSkill(null)
+      await fetchSkills(true)
+    } catch (error) {
+      addLog(`[ERROR] Skill bijwerken: ${error.message}`)
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const deleteSkill = async (id) => {
+    const key = `delete-skill-${id}`
+    try {
+      setBusy(key, true)
+      const res = await fetch(`http://0.0.0.0:3001/api/openclaw/skills/${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Verwijderen mislukt')
+      addLog(`[OK] ${data.message}`)
+      await fetchSkills(true)
+      await fetchAgents(true)
+    } catch (error) {
+      addLog(`[ERROR] Skill verwijderen: ${error.message}`)
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const testSkill = async (id) => {
+    const key = `test-skill-${id}`
+    try {
+      setBusy(key, true)
+      addLog(`[WAIT] Skill testen...`)
+      const res = await fetch(`http://0.0.0.0:3001/api/openclaw/skills/${id}/test`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Test mislukt')
+      addLog(`[OK] Skill test output: ${data.output?.substring(0, 80)}${data.output?.length > 80 ? '...' : ''}`)
+      return data.output
+    } catch (error) {
+      addLog(`[ERROR] Skill test: ${error.message}`)
+      return null
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const assignSkill = async (agentId, skillId) => {
+    if (!skillId) return
+    const key = `assign-skill-${agentId}`
+    try {
+      setBusy(key, true)
+      const res = await fetch(`http://0.0.0.0:3001/api/openclaw/agents/${agentId}/skills`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skillId }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Toewijzen mislukt')
+      addLog(`[OK] ${data.message}`)
+      await fetchAgents(true)
+    } catch (error) {
+      addLog(`[ERROR] Skill toewijzen: ${error.message}`)
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
+  const removeSkill = async (agentId, skillId) => {
+    const key = `remove-skill-${agentId}-${skillId}`
+    try {
+      setBusy(key, true)
+      const res = await fetch(`http://0.0.0.0:3001/api/openclaw/agents/${agentId}/skills/${skillId}`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Verwijderen mislukt')
+      addLog(`[OK] Skill verwijderd van agent`)
+      await fetchAgents(true)
+    } catch (error) {
+      addLog(`[ERROR] Skill verwijderen van agent: ${error.message}`)
+    } finally {
+      setBusy(key, false)
+    }
+  }
+
   useEffect(() => {
     refreshAll()
 
@@ -453,6 +693,8 @@ export default function App() {
       fetchClusterStatus(true)
       fetchOllamaDashboard(true)
       fetchOpenclawDashboard(true)
+      fetchAgents(true)
+      fetchSkills(true)
     }, 10000)
 
     return () => clearInterval(interval)
@@ -909,6 +1151,258 @@ export default function App() {
           </div>
         </AccordionSection>
 
+        <AccordionSection name="agents" title="OpenClaw Agents">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="text-2xl font-semibold">OpenClaw Agents</h3>
+              <p className="mt-1 text-sm text-zinc-400">Beheer en monitor AI agents op de OpenClaw node.</p>
+            </div>
+            <ActionButton
+              label="Vernieuwen"
+              onClick={() => fetchAgents(false)}
+              busy={commandBusy['fetch-agents']}
+            />
+          </div>
+
+          {/* Agent aanmaken formulier */}
+          <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+            <h4 className="mb-4 text-lg font-semibold">Nieuwe Agent</h4>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <input
+                value={agentForm.name}
+                onChange={(e) => setAgentForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Naam"
+                className="rounded-xl border border-zinc-700 bg-black px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-cyan-500"
+              />
+              <input
+                value={agentForm.description}
+                onChange={(e) => setAgentForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Beschrijving"
+                className="rounded-xl border border-zinc-700 bg-black px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-cyan-500"
+              />
+              <select
+                value={agentForm.model}
+                onChange={(e) => setAgentForm((f) => ({ ...f, model: e.target.value }))}
+                className="rounded-xl border border-zinc-700 bg-black px-4 py-2 text-sm text-white outline-none focus:border-cyan-500"
+              >
+                <option value="">Selecteer model</option>
+                {[...new Set([...openclawOllama.modelNames, ...ollamaModels])].map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <ActionButton
+                label={commandBusy['create-agent'] ? 'Aanmaken...' : 'Agent Aanmaken'}
+                onClick={createAgent}
+                busy={commandBusy['create-agent']}
+              />
+            </div>
+          </div>
+
+          {/* Agent lijst */}
+          {agents.length === 0 ? (
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-500">
+              Geen agents aangemaakt.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {agents.map((agent) => (
+                <div key={agent.id} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className={`h-2 w-2 rounded-full ${agent.status === 'running' ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}`} />
+                        <span className="font-semibold text-white">{agent.name}</span>
+                        <span className={`text-xs uppercase tracking-wide ${agent.status === 'running' ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {agent.status}
+                        </span>
+                      </div>
+                      {agent.description && (
+                        <p className="mt-1 text-sm text-zinc-400">{agent.description}</p>
+                      )}
+                      {agent.model && (
+                        <p className="mt-1 text-xs text-zinc-500">Model: {agent.model}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <ActionButton
+                        label="Start"
+                        onClick={() => startAgent(agent.id)}
+                        busy={commandBusy[`start-agent-${agent.id}`]}
+                      />
+                      <ActionButton
+                        label="Stop"
+                        onClick={() => stopAgent(agent.id)}
+                        busy={commandBusy[`stop-agent-${agent.id}`]}
+                        variant="danger"
+                      />
+                      <ActionButton
+                        label={commandBusy[`logs-agent-${agent.id}`] ? 'Laden...' : 'Logs'}
+                        onClick={() => viewAgentLogs(agent.id)}
+                        busy={commandBusy[`logs-agent-${agent.id}`]}
+                      />
+                      <ActionButton
+                        label="Verwijder"
+                        onClick={() => deleteAgent(agent.id)}
+                        busy={commandBusy[`delete-agent-${agent.id}`]}
+                        variant="danger"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Skill toewijzing */}
+                  <div className="mb-3">
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {agent.skills.length === 0 ? (
+                        <span className="text-xs text-zinc-600">Geen skills toegewezen</span>
+                      ) : (
+                        agent.skills.map((sid) => {
+                          const sk = skills.find((s) => s.id === sid)
+                          return sk ? (
+                            <span key={sid} className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-black px-2 py-1 text-xs text-white">
+                              {sk.name}
+                              <button
+                                onClick={() => removeSkill(agent.id, sid)}
+                                className="ml-1 text-red-400 hover:text-red-300"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ) : null
+                        })
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <AgentSkillSelect
+                        agentId={agent.id}
+                        agentSkills={agent.skills}
+                        allSkills={skills}
+                        onAssign={assignSkill}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Logs weergave */}
+                  {agentLogs[agent.id] && (
+                    <pre className="mt-3 max-h-48 overflow-auto rounded-xl border border-zinc-800 bg-black p-3 font-mono text-xs text-cyan-400">
+                      {agentLogs[agent.id]}
+                    </pre>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </AccordionSection>
+
+        <AccordionSection name="skills" title="OpenClaw Skills">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="text-2xl font-semibold">OpenClaw Skills</h3>
+              <p className="mt-1 text-sm text-zinc-400">Ontwikkel en beheer skills voor OpenClaw agents.</p>
+            </div>
+            <ActionButton
+              label="Vernieuwen"
+              onClick={() => fetchSkills(false)}
+              busy={commandBusy['fetch-skills']}
+            />
+          </div>
+
+          {/* Skill aanmaken / bewerken formulier */}
+          <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+            <h4 className="mb-4 text-lg font-semibold">
+              {editingSkill ? 'Skill Bewerken' : 'Nieuwe Skill'}
+            </h4>
+            <div className="grid gap-3">
+              <div className="grid gap-3 lg:grid-cols-2">
+                <input
+                  value={editingSkill ? editingSkill.name : skillForm.name}
+                  onChange={(e) =>
+                    editingSkill
+                      ? setEditingSkill((s) => ({ ...s, name: e.target.value }))
+                      : setSkillForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                  placeholder="Naam"
+                  className="rounded-xl border border-zinc-700 bg-black px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-cyan-500"
+                />
+                <input
+                  value={editingSkill ? editingSkill.description : skillForm.description}
+                  onChange={(e) =>
+                    editingSkill
+                      ? setEditingSkill((s) => ({ ...s, description: e.target.value }))
+                      : setSkillForm((f) => ({ ...f, description: e.target.value }))
+                  }
+                  placeholder="Beschrijving"
+                  className="rounded-xl border border-zinc-700 bg-black px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-cyan-500"
+                />
+              </div>
+              <select
+                value={editingSkill ? editingSkill.type : skillForm.type}
+                onChange={(e) =>
+                  editingSkill
+                    ? setEditingSkill((s) => ({ ...s, type: e.target.value }))
+                    : setSkillForm((f) => ({ ...f, type: e.target.value }))
+                }
+                className="rounded-xl border border-zinc-700 bg-black px-4 py-2 text-sm text-white outline-none focus:border-cyan-500"
+              >
+                <option value="prompt">prompt</option>
+                <option value="script">script</option>
+                <option value="api-call">api-call</option>
+              </select>
+              <textarea
+                value={editingSkill ? editingSkill.code : skillForm.code}
+                onChange={(e) =>
+                  editingSkill
+                    ? setEditingSkill((s) => ({ ...s, code: e.target.value }))
+                    : setSkillForm((f) => ({ ...f, code: e.target.value }))
+                }
+                placeholder="Code / prompt / URL..."
+                rows={4}
+                className="rounded-xl border border-zinc-700 bg-black px-4 py-2 font-mono text-sm text-white placeholder-zinc-500 outline-none focus:border-cyan-500"
+              />
+              <div className="flex gap-3">
+                {editingSkill ? (
+                  <>
+                    <ActionButton
+                      label={commandBusy[`update-skill-${editingSkill.id}`] ? 'Opslaan...' : 'Opslaan'}
+                      onClick={() => updateSkill(editingSkill.id)}
+                      busy={commandBusy[`update-skill-${editingSkill.id}`]}
+                    />
+                    <ActionButton
+                      label="Annuleren"
+                      onClick={() => setEditingSkill(null)}
+                    />
+                  </>
+                ) : (
+                  <ActionButton
+                    label={commandBusy['create-skill'] ? 'Aanmaken...' : 'Skill Aanmaken'}
+                    onClick={createSkill}
+                    busy={commandBusy['create-skill']}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Skill lijst */}
+          {skills.length === 0 ? (
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-500">
+              Geen skills aangemaakt.
+            </div>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {skills.map((skill) => (
+                <SkillCard
+                  key={skill.id}
+                  skill={skill}
+                  busy={commandBusy}
+                  onEdit={() => setEditingSkill({ ...skill })}
+                  onDelete={() => deleteSkill(skill.id)}
+                  onTest={testSkill}
+                />
+              ))}
+            </div>
+          )}
+        </AccordionSection>
+
         <AccordionSection name="ai" title="AI Console">
         <h3 className="text-2xl font-semibold mb-4">AI Console</h3>
 
@@ -974,6 +1468,96 @@ export default function App() {
         </section>
         </AccordionSection>
       </div>
+    </div>
+  )
+}
+
+function AgentSkillSelect({ agentId, agentSkills, allSkills, onAssign }) {
+  const [selected, setSelected] = useState('')
+
+  const available = allSkills.filter((s) => !agentSkills.includes(s.id))
+
+  const handleChange = (e) => {
+    const skillId = e.target.value
+    if (skillId) {
+      onAssign(agentId, skillId)
+      setSelected('')
+    }
+  }
+
+  return (
+    <select
+      value={selected}
+      onChange={handleChange}
+      className="flex-1 rounded-xl border border-zinc-700 bg-black px-3 py-2 text-sm text-white outline-none focus:border-cyan-500"
+    >
+      <option value="">Skill toevoegen...</option>
+      {available.map((s) => (
+        <option key={s.id} value={s.id}>{s.name}</option>
+      ))}
+    </select>
+  )
+}
+
+function SkillCard({ skill, busy, onEdit, onDelete, onTest }) {
+  const [testOutput, setTestOutput] = useState(null)
+  const [testing, setTesting] = useState(false)
+
+  const typeBadge = {
+    prompt: 'border-cyan-700 bg-cyan-950/30 text-cyan-400',
+    script: 'border-violet-700 bg-violet-950/30 text-violet-400',
+    'api-call': 'border-amber-700 bg-amber-950/30 text-amber-400',
+  }[skill.type] || 'border-zinc-700 bg-zinc-900 text-zinc-400'
+
+  const handleTest = async () => {
+    setTesting(true)
+    const output = await onTest(skill.id)
+    setTestOutput(output)
+    setTesting(false)
+  }
+
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-white">{skill.name}</span>
+            <span className={`rounded-lg border px-2 py-0.5 text-xs font-medium ${typeBadge}`}>
+              {skill.type}
+            </span>
+          </div>
+          {skill.description && (
+            <p className="mt-1 text-sm text-zinc-400">{skill.description}</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <ActionButton label="Bewerk" onClick={onEdit} />
+          <ActionButton
+            label={testing ? 'Testen...' : 'Test'}
+            onClick={handleTest}
+            busy={testing}
+          />
+          <ActionButton
+            label="Verwijder"
+            onClick={onDelete}
+            busy={busy[`delete-skill-${skill.id}`]}
+            variant="danger"
+          />
+        </div>
+      </div>
+      {skill.code && (
+        <pre className="max-h-24 overflow-auto rounded-xl border border-zinc-800 bg-black p-3 font-mono text-xs text-zinc-400">
+          {skill.code}
+        </pre>
+      )}
+      {testOutput && (
+        <div className="mt-3">
+          <div className="mb-1 text-xs uppercase tracking-wide text-zinc-500">Test output</div>
+          <pre className="max-h-40 overflow-auto rounded-xl border border-zinc-800 bg-black p-3 font-mono text-xs text-emerald-400">
+            {testOutput}
+          </pre>
+        </div>
+      )}
     </div>
   )
 }
