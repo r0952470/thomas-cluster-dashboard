@@ -1,0 +1,26 @@
+/* Hide xterm scrollbars completely */
+.xterm {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.xterm::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.xterm-screen {
+  overflow: hidden !important;
+}
+
+.xterm-viewport {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  overflow: hidden !important;
+}
+
+.xterm-viewport::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+}
