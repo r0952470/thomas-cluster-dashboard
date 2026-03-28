@@ -55,8 +55,9 @@ function execCommand(command, options = {}) {
 }
 
 function ping(ip) {
+  const flag = process.platform === 'win32' ? '-n' : '-c'
   return new Promise((resolve) => {
-    exec(`ping -n 1 ${ip}`, (error) => {
+    exec(`ping ${flag} 1 ${ip}`, (error) => {
       resolve(!error)
     })
   })

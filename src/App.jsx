@@ -124,7 +124,7 @@ export default function App() {
         addLog('[WAIT] Cluster status ophalen...')
       }
 
-      const response = await fetch('http://0.0.0.0:3001/api/cluster/status')
+      const response = await fetch('http://localhost:3001/api/cluster/status')
       const data = await response.json()
 
       if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
@@ -158,8 +158,8 @@ export default function App() {
       if (!silent) addLog('[WAIT] Ollama dashboard data ophalen...')
 
       const [modelsRes, currentRes] = await Promise.all([
-        fetch('http://0.0.0.0:3001/api/ollama/models'),
-        fetch('http://0.0.0.0:3001/api/ollama/current'),
+        fetch('http://localhost:3001/api/ollama/models'),
+        fetch('http://localhost:3001/api/ollama/current'),
       ])
 
       const modelsData = await modelsRes.json()
@@ -184,9 +184,9 @@ export default function App() {
       if (!silent) addLog('[WAIT] OpenClaw info ophalen...')
 
       const [statusRes, infoRes, ollamaRes] = await Promise.all([
-        fetch('http://0.0.0.0:3001/api/openclaw/status'),
-        fetch('http://0.0.0.0:3001/api/openclaw/system-info'),
-        fetch('http://0.0.0.0:3001/api/openclaw/ollama'),
+        fetch('http://localhost:3001/api/openclaw/status'),
+        fetch('http://localhost:3001/api/openclaw/system-info'),
+        fetch('http://localhost:3001/api/openclaw/ollama'),
       ])
 
       const statusData = await statusRes.json()
@@ -265,7 +265,7 @@ export default function App() {
       addLog(`[WAIT] Ping naar ${nodeName}...`)
 
       const response = await fetch(
-        `http://0.0.0.0:3001/api/nodes/${encodeURIComponent(nodeName)}/ping`,
+        `http://localhost:3001/api/nodes/${encodeURIComponent(nodeName)}/ping`,
         { method: 'POST' }
       )
       const data = await response.json()
@@ -288,7 +288,7 @@ export default function App() {
       addLog(`[WAIT] Restart aanvraag voor ${nodeName}...`)
 
       const response = await fetch(
-        `http://0.0.0.0:3001/api/nodes/${encodeURIComponent(nodeName)}/restart`,
+        `http://localhost:3001/api/nodes/${encodeURIComponent(nodeName)}/restart`,
         { method: 'POST' }
       )
       const data = await response.json()
@@ -309,7 +309,7 @@ export default function App() {
       setBusy(key, true)
       addLog('[WAIT] Ollama status controleren...')
 
-      const response = await fetch('http://0.0.0.0:3001/api/ollama/status')
+      const response = await fetch('http://localhost:3001/api/ollama/status')
       const data = await response.json()
 
       if (!response.ok) throw new Error(data.error || 'Ollama check mislukt')
@@ -329,7 +329,7 @@ export default function App() {
       setBusy(key, true)
       addLog('[WAIT] Ollama restart gestart...')
 
-      const response = await fetch('http://0.0.0.0:3001/api/ollama/restart', {
+      const response = await fetch('http://localhost:3001/api/ollama/restart', {
         method: 'POST',
       })
       const data = await response.json()
@@ -372,7 +372,7 @@ export default function App() {
       setBusy(key, true)
       addLog(`[WAIT] Default model instellen naar ${selectedModel}...`)
 
-      const response = await fetch('http://0.0.0.0:3001/api/ollama/current', {
+      const response = await fetch('http://localhost:3001/api/ollama/current', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: selectedModel }),
@@ -398,7 +398,7 @@ export default function App() {
       addLog(`[WAIT] ${service} herstarten op OpenClaw...`)
 
       const response = await fetch(
-        `http://0.0.0.0:3001/api/openclaw/services/${service}/restart`,
+        `http://localhost:3001/api/openclaw/services/${service}/restart`,
         { method: 'POST' }
       )
 
@@ -422,7 +422,7 @@ export default function App() {
       setBusy(key, true)
       addLog('[WAIT] Cluster reset gestart...')
 
-      const response = await fetch('http://0.0.0.0:3001/api/cluster/reset', {
+      const response = await fetch('http://localhost:3001/api/cluster/reset', {
         method: 'POST',
       })
 
@@ -448,7 +448,7 @@ export default function App() {
       setBusy(key, true)
       setOpenclawOutput(`▶ ${openclawCommand}\n⏳ Executing...\n`)
 
-      const response = await fetch('http://0.0.0.0:3001/api/openclaw/execute', {
+      const response = await fetch('http://localhost:3001/api/openclaw/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: openclawCommand }),
@@ -535,7 +535,7 @@ export default function App() {
   setAiMessages((prev) => [...prev, userMessage])
 
   try {
-    const response = await fetch('http://0.0.0.0:3001/api/ollama/generate', {
+    const response = await fetch('http://localhost:3001/api/ollama/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: aiInput }),
@@ -1122,7 +1122,7 @@ function TerminalPane({ title, wsType }) {
     fitAddon.fit()
 
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const ws = new WebSocket(`${protocol}://0.0.0.0:3001/ws/terminal?type=${wsType}`)
+    const ws = new WebSocket(`${protocol}://localhost:3001/ws/terminal?type=${wsType}`)
 
     ws.onopen = () => {
       term.writeln(`\x1b[32m[connected]\x1b[0m ${title}`)
