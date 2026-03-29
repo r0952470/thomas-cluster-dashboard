@@ -13,6 +13,8 @@ const flowSteps = [
   'Dashboards en panelen activeren',
 ]
 
+const DASHBOARD_STORAGE_KEY = 'cluster-dashboard-active-slide'
+
 export default function App() {
   const [nodes, setNodes] = useState([])
   const [clusterState, setClusterState] = useState('IDLE')
@@ -47,6 +49,11 @@ export default function App() {
     models: [],
     modelNames: [],
   })
+  const [activeDashboard, setActiveDashboard] = useState(0)
+  const touchStartXRef = useRef(null)
+  const touchStartYRef = useRef(null)
+  const touchEndXRef = useRef(null)
+  const touchEndYRef = useRef(null)
 
   const addLog = (line) => {
     setLogs((prev) => [line, ...prev].slice(0, 40))
@@ -56,41 +63,58 @@ export default function App() {
     setCommandBusy((prev) => ({ ...prev, [key]: value }))
   }
 
-  const [expandedSections, setExpandedSections] = useState({
-    openclaw: true,
-    ollama: true,
-    cluster: true,
-    ai: false,
-    terminals: false,
-  })
+  const dashboardSlides = [
+    { key: 'cluster', title: 'Cluster Nodes' },
+    { key: 'ollama', title: 'Ollama Dashboard' },
+    { key: 'openclaw', title: 'OpenClaw Gateway' },
+    { key: 'ai', title: 'AI Console' },
+    { key: 'terminal', title: 'Dual Terminal' },
+    { key: 'logs', title: 'Live System Logs' },
+  ]
 
-  const toggleSection = (name) => {
-    setExpandedSections((prev) => ({ ...prev, [name]: !prev[name] }))
+  const nextDashboard = () => {
+    setActiveDashboard((prev) => (prev + 1) % dashboardSlides.length)
   }
 
-  const AccordionSection = ({ name, title, children, defaultOpen = false }) => {
-    const isOpen = expandedSections[name] ?? defaultOpen
-
-    return (
-      <section className="mt-4 rounded-2xl border border-zinc-800 bg-black">
-        <button
-          type="button"
-          onClick={() => toggleSection(name)}
-          className="w-full flex items-center justify-between p-4 text-left"
-        >
-          <span className="text-lg font-semibold">{title}</span>
-          <span className="text-zinc-400">{isOpen ? '▾' : '▸'}</span>
-        </button>
-
-        <div
-          className={`overflow-hidden transition-[max-height] duration-300 ease-out ${
-            isOpen ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'
-          }`}
-        >
-          <div className="p-4">{children}</div>
-        </div>
-      </section>
+  const prevDashboard = () => {
+    setActiveDashboard((prev) =>
+      prev === 0 ? dashboardSlides.length - 1 : prev - 1
     )
+  }
+
+  const handleCarouselTouchStart = (event) => {
+    const touch = event.changedTouches?.[0]
+    if (!touch) return
+    touchStartXRef.current = touch.clientX
+    touchStartYRef.current = touch.clientY
+    touchEndXRef.current = touch.clientX
+    touchEndYRef.current = touch.clientY
+  }
+
+  const handleCarouselTouchMove = (event) => {
+    const touch = event.changedTouches?.[0]
+    if (!touch) return
+    touchEndXRef.current = touch.clientX
+    touchEndYRef.current = touch.clientY
+  }
+
+  const handleCarouselTouchEnd = () => {
+    if (touchStartXRef.current == null || touchEndXRef.current == null) return
+
+    const deltaX = touchStartXRef.current - touchEndXRef.current
+    const deltaY = (touchStartYRef.current ?? 0) - (touchEndYRef.current ?? 0)
+    const minSwipeDistance = 50
+
+    // Alleen horizontale swipe gebruiken voor carousel navigatie.
+    if (Math.abs(deltaX) > minSwipeDistance && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      if (deltaX > 0) nextDashboard()
+      else prevDashboard()
+    }
+
+    touchStartXRef.current = null
+    touchStartYRef.current = null
+    touchEndXRef.current = null
+    touchEndYRef.current = null
   }
 
   const fetchClusterStatus = async (silent = false) => {
@@ -100,7 +124,7 @@ export default function App() {
         addLog('[WAIT] Cluster status ophalen...')
       }
 
-      const response = await fetch('http://0.0.0.0:3001/api/cluster/status')
+      const response = await fetch('http://localhost:3001/api/cluster/status')
       const data = await response.json()
 
       if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
@@ -134,8 +158,8 @@ export default function App() {
       if (!silent) addLog('[WAIT] Ollama dashboard data ophalen...')
 
       const [modelsRes, currentRes] = await Promise.all([
-        fetch('http://0.0.0.0:3001/api/ollama/models'),
-        fetch('http://0.0.0.0:3001/api/ollama/current'),
+        fetch('http://localhost:3001/api/ollama/models'),
+        fetch('http://localhost:3001/api/ollama/current'),
       ])
 
       const modelsData = await modelsRes.json()
@@ -160,9 +184,9 @@ export default function App() {
       if (!silent) addLog('[WAIT] OpenClaw info ophalen...')
 
       const [statusRes, infoRes, ollamaRes] = await Promise.all([
-        fetch('http://0.0.0.0:3001/api/openclaw/status'),
-        fetch('http://0.0.0.0:3001/api/openclaw/system-info'),
-        fetch('http://0.0.0.0:3001/api/openclaw/ollama'),
+        fetch('http://localhost:3001/api/openclaw/status'),
+        fetch('http://localhost:3001/api/openclaw/system-info'),
+        fetch('http://localhost:3001/api/openclaw/ollama'),
       ])
 
       const statusData = await statusRes.json()
@@ -241,7 +265,7 @@ export default function App() {
       addLog(`[WAIT] Ping naar ${nodeName}...`)
 
       const response = await fetch(
-        `http://0.0.0.0:3001/api/nodes/${encodeURIComponent(nodeName)}/ping`,
+        `http://localhost:3001/api/nodes/${encodeURIComponent(nodeName)}/ping`,
         { method: 'POST' }
       )
       const data = await response.json()
@@ -257,6 +281,27 @@ export default function App() {
     }
   }
 
+  const openNodeGui = (node) => {
+    const guiUrls = {
+      proxmox: (ip) => `https://${ip}:8006/`,
+      openclaw: (ip) => `http://${ip}:8080/`,
+    }
+
+    const name = node.name.toLowerCase()
+    let url = null
+
+    for (const [key, builder] of Object.entries(guiUrls)) {
+      if (name.includes(key)) {
+        url = builder(node.ip)
+        break
+      }
+    }
+
+    if (!url) return
+
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   const restartNode = async (nodeName) => {
     const key = `restart-${nodeName}`
     try {
@@ -264,7 +309,7 @@ export default function App() {
       addLog(`[WAIT] Restart aanvraag voor ${nodeName}...`)
 
       const response = await fetch(
-        `http://0.0.0.0:3001/api/nodes/${encodeURIComponent(nodeName)}/restart`,
+        `http://localhost:3001/api/nodes/${encodeURIComponent(nodeName)}/restart`,
         { method: 'POST' }
       )
       const data = await response.json()
@@ -285,7 +330,7 @@ export default function App() {
       setBusy(key, true)
       addLog('[WAIT] Ollama status controleren...')
 
-      const response = await fetch('http://0.0.0.0:3001/api/ollama/status')
+      const response = await fetch('http://localhost:3001/api/ollama/status')
       const data = await response.json()
 
       if (!response.ok) throw new Error(data.error || 'Ollama check mislukt')
@@ -305,7 +350,7 @@ export default function App() {
       setBusy(key, true)
       addLog('[WAIT] Ollama restart gestart...')
 
-      const response = await fetch('http://0.0.0.0:3001/api/ollama/restart', {
+      const response = await fetch('http://localhost:3001/api/ollama/restart', {
         method: 'POST',
       })
       const data = await response.json()
@@ -348,7 +393,7 @@ export default function App() {
       setBusy(key, true)
       addLog(`[WAIT] Default model instellen naar ${selectedModel}...`)
 
-      const response = await fetch('http://0.0.0.0:3001/api/ollama/current', {
+      const response = await fetch('http://localhost:3001/api/ollama/current', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: selectedModel }),
@@ -374,7 +419,7 @@ export default function App() {
       addLog(`[WAIT] ${service} herstarten op OpenClaw...`)
 
       const response = await fetch(
-        `http://0.0.0.0:3001/api/openclaw/services/${service}/restart`,
+        `http://localhost:3001/api/openclaw/services/${service}/restart`,
         { method: 'POST' }
       )
 
@@ -398,7 +443,7 @@ export default function App() {
       setBusy(key, true)
       addLog('[WAIT] Cluster reset gestart...')
 
-      const response = await fetch('http://0.0.0.0:3001/api/cluster/reset', {
+      const response = await fetch('http://localhost:3001/api/cluster/reset', {
         method: 'POST',
       })
 
@@ -424,7 +469,7 @@ export default function App() {
       setBusy(key, true)
       setOpenclawOutput(`▶ ${openclawCommand}\n⏳ Executing...\n`)
 
-      const response = await fetch('http://0.0.0.0:3001/api/openclaw/execute', {
+      const response = await fetch('http://localhost:3001/api/openclaw/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: openclawCommand }),
@@ -457,6 +502,53 @@ export default function App() {
 
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(DASHBOARD_STORAGE_KEY)
+    if (stored == null) return
+
+    const parsed = Number(stored)
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed < dashboardSlides.length) {
+      setActiveDashboard(parsed)
+    }
+  }, [dashboardSlides.length])
+
+  useEffect(() => {
+    window.localStorage.setItem(DASHBOARD_STORAGE_KEY, String(activeDashboard))
+  }, [activeDashboard])
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.defaultPrevented) return
+      if (event.altKey || event.ctrlKey || event.metaKey) return
+
+      const target = event.target
+      if (target instanceof HTMLElement) {
+        const tagName = target.tagName
+        const isInputLike =
+          tagName === 'INPUT' ||
+          tagName === 'TEXTAREA' ||
+          tagName === 'SELECT' ||
+          target.isContentEditable
+
+        if (isInputLike || target.closest('.xterm')) return
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        nextDashboard()
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        prevDashboard()
+      }
+    }
+
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [dashboardSlides.length])
+
   const sendPrompt = async () => {
   if (!aiInput) return
 
@@ -464,7 +556,7 @@ export default function App() {
   setAiMessages((prev) => [...prev, userMessage])
 
   try {
-    const response = await fetch('http://0.0.0.0:3001/api/ollama/generate', {
+    const response = await fetch('http://localhost:3001/api/ollama/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: aiInput }),
@@ -594,7 +686,7 @@ export default function App() {
         <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
           <StatCard
             title="Nodes"
-            value={`${nodesLive}/3 live`}
+            value={`${nodesLive}/${nodes.length || 5} live`}
             dotColor={nodesLive > 0 ? 'bg-emerald-500' : 'bg-red-500'}
           />
           <StatCard
@@ -622,357 +714,439 @@ export default function App() {
         </section>
 
         <section className="mt-8 rounded-[2rem] border border-zinc-800 bg-black p-6">
-          <div className="mb-4 flex items-center justify-between gap-4">
-            <h3 className="text-2xl font-semibold">Cluster Nodes</h3>
-
-            <div className="flex flex-wrap gap-3">
-              <ActionButton
-                label="Check Ollama"
-                onClick={checkOllama}
-                busy={commandBusy['check-ollama']}
-              />
-              <ActionButton
-                label="Restart Ollama"
-                onClick={restartOllama}
-                busy={commandBusy['restart-ollama']}
-                variant="danger"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            {nodes.map((node) => (
-              <div
-                key={node.name}
-                className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5"
-              >
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div className="text-lg font-semibold">{node.name}</div>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`h-3 w-3 rounded-full ${
-                        node.status === 'online'
-                          ? 'bg-emerald-500 animate-pulse'
-                          : 'bg-red-500'
-                      }`}
-                    />
-                    <span className="text-sm text-zinc-300">{node.status}</span>
-                  </div>
-                </div>
-
-                <div className="text-sm text-zinc-400">{node.role}</div>
-                <div className="mt-2 text-xs uppercase tracking-[0.2em] text-zinc-500">
-                  {node.ip}
-                </div>
-
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  <ActionButton
-                    label="Ping"
-                    onClick={() => pingNode(node.name)}
-                    busy={commandBusy[`ping-${node.name}`]}
-                  />
-                  <ActionButton
-                    label="Restart"
-                    onClick={() => restartNode(node.name)}
-                    busy={commandBusy[`restart-${node.name}`]}
-                    variant="danger"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-
-
-<section className="mt-8 rounded-[2rem] border border-zinc-800 bg-black p-6">
-  <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h3 className="text-2xl font-semibold">Ollama Dashboard v1</h3>
-              <p className="mt-1 text-sm text-zinc-400">
-                Beheer lokale modellen zonder config-bestanden open te trekken.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <ActionButton
-                label="Refresh Models"
-                onClick={refreshModels}
-                busy={commandBusy['refresh-models']}
-              />
-              <ActionButton
-                label="Restart Ollama"
-                onClick={restartOllama}
-                busy={commandBusy['restart-ollama']}
-                variant="danger"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-4">
-            <PanelCard title="Ollama Status" value={ollamaStatus} />
-            <PanelCard title="Local Models" value={String(ollamaModels.length)} />
-            <PanelCard title="Current Model" value={currentModel || 'geen'} />
-            <PanelCard title="Selected Model" value={selectedModel || 'geen'} />
-          </div>
-
-          <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-              <h4 className="mb-4 text-lg font-semibold">Beschikbare modellen</h4>
-
-              <div className="max-h-72 overflow-auto rounded-xl border border-zinc-800 bg-black p-3">
-                {ollamaModels.length === 0 ? (
-                  <div className="text-sm text-zinc-500">Geen modellen gevonden.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {ollamaModels.map((model) => (
-                      <button
-                        key={model}
-                        onClick={() => setSelectedModel(model)}
-                        className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition ${
-                          selectedModel === model
-                            ? 'border-cyan-500 bg-cyan-950/20'
-                            : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900'
-                        }`}
-                      >
-                        <span className="font-medium">{model}</span>
-                        {currentModel === model && (
-                          <span className="text-xs uppercase tracking-[0.2em] text-emerald-400">
-                            active
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-              <h4 className="mb-4 text-lg font-semibold">Model Control</h4>
-
-              <label className="mb-2 block text-sm text-zinc-400">Default model</label>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white outline-none transition focus:border-cyan-500"
-              >
-                <option value="">Selecteer model</option>
-                {ollamaModels.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
-
-              <div className="mt-4 grid gap-3">
-                <ActionButton
-                  label="Set Default Model"
-                  onClick={setDefaultModel}
-                  busy={commandBusy['set-model']}
-                />
-                <ActionButton
-                  label="Check Ollama"
-                  onClick={checkOllama}
-                  busy={commandBusy['check-ollama']}
-                />
-              </div>
-
-              <div className="mt-6 rounded-xl border border-zinc-800 bg-black p-4 text-sm text-zinc-400">
-                <div className="mb-2">
-                  <span className="text-zinc-500">Huidig actief:</span>{' '}
-                  <span className="text-white">{currentModel || 'geen'}</span>
-                </div>
-                <div>
-                  <span className="text-zinc-500">Geselecteerd:</span>{' '}
-                  <span className="text-white">{selectedModel || 'geen'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <AccordionSection name="openclaw" title="OpenClaw Gateway v1">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h3 className="text-2xl font-semibold">OpenClaw Gateway v1</h3>
+              <h3 className="text-2xl font-semibold">Split Dashboard Carousel</h3>
               <p className="mt-1 text-sm text-zinc-400">
-                Monitor en beheer Ubuntu/OpenClaw gateway node.
+                Overzicht per board in losse slides in plaats van alles onder elkaar.
               </p>
             </div>
-
-            <div className="flex flex-wrap gap-3">
-              <ActionButton
-                label="Refresh Status"
-                onClick={() => {
-                  setBusy('refresh-openclaw', true)
-                  fetchOpenclawDashboard(false).then(() => setBusy('refresh-openclaw', false))
-                }}
-                busy={commandBusy['refresh-openclaw']}
-              />
-              <ActionButton
-                label="Cluster Reset"
-                onClick={clusterReset}
-                busy={commandBusy['cluster-reset']}
-                variant="danger"
-              />
+            <div className="flex items-center gap-3">
+              <ActionButton label="Vorige" onClick={prevDashboard} />
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-300">
+                {activeDashboard + 1} / {dashboardSlides.length}
+              </div>
+              <ActionButton label="Volgende" onClick={nextDashboard} />
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-4">
-            <PanelCard
-              title="OpenClaw Status"
-              value={openclawStatus === 'online' ? '🟢 Online' : '🔴 Offline'}
-            />
-            <PanelCard title="CPU Cores" value={openclawInfo.cpu_cores} />
-            <PanelCard title="Memory" value={openclawInfo.memory} />
-            <PanelCard title="Disk" value={openclawInfo.disk || '-'} />
+          <div className="mb-6 flex flex-wrap gap-2">
+            {dashboardSlides.map((slide, index) => (
+              <button
+                key={slide.key}
+                onClick={() => setActiveDashboard(index)}
+                className={`rounded-xl border px-3 py-2 text-xs uppercase tracking-[0.2em] transition ${
+                  activeDashboard === index
+                    ? 'border-cyan-500 bg-cyan-950/30 text-cyan-200'
+                    : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                }`}
+              >
+                {slide.title}
+              </button>
+            ))}
           </div>
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-              <h4 className="mb-4 text-lg font-semibold">Services</h4>
+          <div
+            className="overflow-hidden"
+            onTouchStart={handleCarouselTouchStart}
+            onTouchMove={handleCarouselTouchMove}
+            onTouchEnd={handleCarouselTouchEnd}
+          >
+            <div
+              className="flex transition-transform duration-500 ease-out"
+              style={{ transform: `translateX(-${activeDashboard * 100}%)` }}
+            >
+              <div className="min-w-full">
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <h3 className="text-2xl font-semibold">Cluster Nodes</h3>
 
-              <div className="space-y-2">
-                {['ollama', 'docker', 'nginx'].map((service) => (
-                  <div
-                    key={service}
-                    className="flex items-center justify-between rounded-xl border border-zinc-800 bg-black p-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 w-2 rounded-full bg-cyan-500 animate-pulse"></div>
-                      <span className="font-medium capitalize">{service}</span>
-                    </div>
+                  <div className="flex flex-wrap gap-3">
                     <ActionButton
-                      label="Restart"
-                      onClick={() => restartOpenclawService(service)}
-                      busy={commandBusy[`restart-openclaw-${service}`]}
+                      label="Check Ollama"
+                      onClick={checkOllama}
+                      busy={commandBusy['check-ollama']}
+                    />
+                    <ActionButton
+                      label="Restart Ollama"
+                      onClick={restartOllama}
+                      busy={commandBusy['restart-ollama']}
                       variant="danger"
                     />
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
 
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-              <h4 className="mb-4 text-lg font-semibold">Quick Commands</h4>
+                <div className="grid gap-4 md:grid-cols-3">
+                  {nodes.map((node) => (
+                    <div
+                      key={node.name}
+                      className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div className="text-lg font-semibold">{node.name}</div>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`h-3 w-3 rounded-full ${
+                              node.status === 'online'
+                                ? 'bg-emerald-500 animate-pulse'
+                                : 'bg-red-500'
+                            }`}
+                          />
+                          <span className="text-sm text-zinc-300">{node.status}</span>
+                        </div>
+                      </div>
 
-              <div className="space-y-3">
-                <input
-                  value={openclawCommand}
-                  onChange={(e) => setOpenclawCommand(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && executeOpenclawCommand()}
-                  placeholder="Typ command (ls, pwd, uptime, etc)"
-                  className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-cyan-500"
-                />
+                      <div className="text-sm text-zinc-400">{node.role}</div>
+                      <div className="mt-2 text-xs uppercase tracking-[0.2em] text-zinc-500">
+                        {node.ip}
+                      </div>
 
-                <ActionButton
-                  label={commandBusy['openclaw-command'] ? 'Executing...' : 'Execute'}
-                  onClick={executeOpenclawCommand}
-                  busy={commandBusy['openclaw-command']}
-                />
-
-                {openclawOutput && (
-                  <div className="mt-3 max-h-40 overflow-auto rounded-xl border border-zinc-800 bg-black p-3 font-mono text-xs text-cyan-400">
-                    {openclawOutput}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-            <h4 className="mb-4 text-lg font-semibold">Ollama Models</h4>
-            <div className="rounded-xl border border-zinc-800 bg-black p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm text-zinc-400">Status:</span>
-                <span className={`text-sm font-medium ${openclawOllama.status === 'Running' ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {openclawOllama.status === 'Running' ? '🟢 Running' : '🔴 Offline'}
-                </span>
-              </div>
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm text-zinc-400">Models:</span>
-                <span className="text-sm font-medium text-white">{openclawOllama.modelsCount}</span>
-              </div>
-              {openclawOllama.models.length > 0 ? (
-                <div className="max-h-40 space-y-1 overflow-auto">
-                  {openclawOllama.models.map((model) => (
-                    <div key={model.name} className="rounded px-3 py-2 bg-zinc-900 text-xs text-cyan-300 font-mono">
-                      {model.name}
+                      <div className="mt-5 grid grid-cols-2 gap-3">
+                        <ActionButton
+                          label="Ping"
+                          onClick={() => pingNode(node.name)}
+                          busy={commandBusy[`ping-${node.name}`]}
+                        />
+                        <ActionButton
+                          label="Restart"
+                          onClick={() => restartNode(node.name)}
+                          busy={commandBusy[`restart-${node.name}`]}
+                          variant="danger"
+                        />
+                        {node.guiUrl && (
+                          <ActionButton
+                            label={`Open ${node.name}`}
+                            onClick={() => {
+                              const slideIdx = dashboardSlides.findIndex(s => s.key === node.name.toLowerCase())
+                              if (slideIdx !== -1) {
+                                setActiveDashboard(slideIdx)
+                              } else {
+                                window.open(node.guiUrl, '_blank', 'noopener,noreferrer')
+                              }
+                            }}
+                          />
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="text-xs text-zinc-500">Geen modellen beschikbaar</div>
-              )}
-            </div>
-          </div>
-        </AccordionSection>
-
-        <AccordionSection name="ai" title="AI Console">
-        <h3 className="text-2xl font-semibold mb-4">AI Console</h3>
-
-      <div className="rounded-xl border border-zinc-800 bg-black p-4 h-[300px] overflow-auto mb-4">
-        {aiMessages.map((msg, i) => (
-      <div key={i} className="mb-3">
-      <div className="text-xs text-zinc-500">{msg.role}</div>
-      <div className="text-white whitespace-pre-wrap">{msg.content}</div>
-      </div>
-    ))}
-  </div>
-
-  <div className="flex gap-3">
-    <input
-      value={aiInput}
-      onChange={(e) => setAiInput(e.target.value)}
-      placeholder="Typ je prompt..."
-      className="flex-1 rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"
-    />
-
-    <button
-      onClick={sendPrompt}
-      className="rounded-xl border border-cyan-500 px-4 py-3"
-    >
-      Send
-    </button>
-  </div>
-</AccordionSection>
-        <AccordionSection name="terminal" title="Dual Terminal v1">
-        <section className="mt-8 rounded-[2rem] border border-zinc-800 bg-black p-1">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <h3 className="text-2xl font-semibold">Dual Terminal v1</h3>
-              <p className="mt-1 text-sm text-zinc-400">
-                Links PowerShell, rechts Linux via SSH.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            <TerminalPane title="PowerShell" wsType="powershell" />
-            <TerminalPane title="Linux SSH" wsType="linux" />
-          </div>
-        </section>
-        </AccordionSection>
-
-        <AccordionSection name="logs" title="Live System Logs">
-        <section className="mt-8 rounded-[2rem] border border-zinc-800 bg-zinc-950/80 p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-2xl font-semibold">Live System Logs</h3>
-            <span className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-              Monitor
-            </span>
-          </div>
-
-          <div className="max-h-72 space-y-2 overflow-auto rounded-2xl border border-zinc-800 bg-black p-4 font-mono text-sm">
-            {logs.map((log, index) => (
-              <div key={index} className="text-zinc-300">
-                {colorizeLog(log)}
               </div>
-            ))}
+
+              <div className="min-w-full">
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-2xl font-semibold">Ollama Dashboard v1</h3>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Beheer lokale modellen zonder config-bestanden open te trekken.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <ActionButton
+                      label="Refresh Models"
+                      onClick={refreshModels}
+                      busy={commandBusy['refresh-models']}
+                    />
+                    <ActionButton
+                      label="Restart Ollama"
+                      onClick={restartOllama}
+                      busy={commandBusy['restart-ollama']}
+                      variant="danger"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-4">
+                  <PanelCard title="Ollama Status" value={ollamaStatus} />
+                  <PanelCard title="Local Models" value={String(ollamaModels.length)} />
+                  <PanelCard title="Current Model" value={currentModel || 'geen'} />
+                  <PanelCard title="Selected Model" value={selectedModel || 'geen'} />
+                </div>
+
+                <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+                    <h4 className="mb-4 text-lg font-semibold">Beschikbare modellen</h4>
+
+                    <div className="max-h-72 overflow-auto rounded-xl border border-zinc-800 bg-black p-3">
+                      {ollamaModels.length === 0 ? (
+                        <div className="text-sm text-zinc-500">Geen modellen gevonden.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {ollamaModels.map((model) => (
+                            <button
+                              key={model}
+                              onClick={() => setSelectedModel(model)}
+                              className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition ${
+                                selectedModel === model
+                                  ? 'border-cyan-500 bg-cyan-950/20'
+                                  : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900'
+                              }`}
+                            >
+                              <span className="font-medium">{model}</span>
+                              {currentModel === model && (
+                                <span className="text-xs uppercase tracking-[0.2em] text-emerald-400">
+                                  active
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+                    <h4 className="mb-4 text-lg font-semibold">Model Control</h4>
+
+                    <label className="mb-2 block text-sm text-zinc-400">Default model</label>
+                    <select
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white outline-none transition focus:border-cyan-500"
+                    >
+                      <option value="">Selecteer model</option>
+                      {ollamaModels.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="mt-4 grid gap-3">
+                      <ActionButton
+                        label="Set Default Model"
+                        onClick={setDefaultModel}
+                        busy={commandBusy['set-model']}
+                      />
+                      <ActionButton
+                        label="Check Ollama"
+                        onClick={checkOllama}
+                        busy={commandBusy['check-ollama']}
+                      />
+                    </div>
+
+                    <div className="mt-6 rounded-xl border border-zinc-800 bg-black p-4 text-sm text-zinc-400">
+                      <div className="mb-2">
+                        <span className="text-zinc-500">Huidig actief:</span>{' '}
+                        <span className="text-white">{currentModel || 'geen'}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">Geselecteerd:</span>{' '}
+                        <span className="text-white">{selectedModel || 'geen'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-w-full">
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-2xl font-semibold">OpenClaw Gateway v1</h3>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Monitor en beheer Ubuntu/OpenClaw gateway node.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <ActionButton
+                      label="Launch OpenClaw"
+                      onClick={async () => {
+                        setBusy('launch-openclaw', true)
+                        try {
+                          const res = await fetch('http://localhost:3001/api/openclaw/execute', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ command: 'ollama launch openclaw' }),
+                          })
+                          const data = await res.json()
+                          setOpenclawOutput(`▶ ollama launch openclaw\n${data.output || data.error || 'Done'}`)
+                        } catch (e) {
+                          setOpenclawOutput(`▶ ollama launch openclaw\n❌ ${e.message}`)
+                        } finally {
+                          setBusy('launch-openclaw', false)
+                        }
+                      }}
+                      busy={commandBusy['launch-openclaw']}
+                    />
+                    <ActionButton
+                      label="Open WebUI"
+                      onClick={() => {
+                        const oc = nodes.find(n => n.name === 'OpenClaw')
+                        window.open(oc?.guiUrl || 'http://100.113.225.117:18789/', '_blank', 'noopener,noreferrer')
+                      }}
+                    />
+                    <ActionButton
+                      label="Refresh Status"
+                      onClick={() => {
+                        setBusy('refresh-openclaw', true)
+                        fetchOpenclawDashboard(false).then(() => setBusy('refresh-openclaw', false))
+                      }}
+                      busy={commandBusy['refresh-openclaw']}
+                    />
+                    <ActionButton
+                      label="Cluster Reset"
+                      onClick={clusterReset}
+                      busy={commandBusy['cluster-reset']}
+                      variant="danger"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-4">
+                  <PanelCard
+                    title="OpenClaw Status"
+                    value={openclawStatus === 'online' ? '🟢 Online' : '🔴 Offline'}
+                  />
+                  <PanelCard title="CPU Cores" value={openclawInfo.cpu_cores} />
+                  <PanelCard title="Memory" value={openclawInfo.memory} />
+                  <PanelCard title="Disk" value={openclawInfo.disk || '-'} />
+                </div>
+
+                <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+                    <h4 className="mb-4 text-lg font-semibold">Services</h4>
+
+                    <div className="space-y-2">
+                      {['ollama', 'docker', 'nginx'].map((service) => (
+                        <div
+                          key={service}
+                          className="flex items-center justify-between rounded-xl border border-zinc-800 bg-black p-4"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-2 w-2 rounded-full bg-cyan-500 animate-pulse"></div>
+                            <span className="font-medium capitalize">{service}</span>
+                          </div>
+                          <ActionButton
+                            label="Restart"
+                            onClick={() => restartOpenclawService(service)}
+                            busy={commandBusy[`restart-openclaw-${service}`]}
+                            variant="danger"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+                    <h4 className="mb-4 text-lg font-semibold">Quick Commands</h4>
+
+                    <div className="space-y-3">
+                      <input
+                        value={openclawCommand}
+                        onChange={(e) => setOpenclawCommand(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && executeOpenclawCommand()}
+                        placeholder="Typ command (ls, pwd, uptime, etc)"
+                        className="w-full rounded-xl border border-zinc-700 bg-black px-4 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-cyan-500"
+                      />
+
+                      <ActionButton
+                        label={commandBusy['openclaw-command'] ? 'Executing...' : 'Execute'}
+                        onClick={executeOpenclawCommand}
+                        busy={commandBusy['openclaw-command']}
+                      />
+
+                      {openclawOutput && (
+                        <div className="mt-3 max-h-40 overflow-auto rounded-xl border border-zinc-800 bg-black p-3 font-mono text-xs text-cyan-400">
+                          {openclawOutput}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+                  <h4 className="mb-4 text-lg font-semibold">Ollama Models</h4>
+                  <div className="rounded-xl border border-zinc-800 bg-black p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-sm text-zinc-400">Status:</span>
+                      <span className={`text-sm font-medium ${openclawOllama.status === 'Running' ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {openclawOllama.status === 'Running' ? '🟢 Running' : '🔴 Offline'}
+                      </span>
+                    </div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-sm text-zinc-400">Models:</span>
+                      <span className="text-sm font-medium text-white">{openclawOllama.modelsCount}</span>
+                    </div>
+                    {openclawOllama.models.length > 0 ? (
+                      <div className="max-h-40 space-y-1 overflow-auto">
+                        {openclawOllama.models.map((model) => (
+                          <div key={model.name} className="rounded bg-zinc-900 px-3 py-2 font-mono text-xs text-cyan-300">
+                            {model.name}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-zinc-500">Geen modellen beschikbaar</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-w-full">
+                <h3 className="mb-4 text-2xl font-semibold">AI Console</h3>
+
+                <div className="mb-4 h-[300px] overflow-auto rounded-xl border border-zinc-800 bg-black p-4">
+                  {aiMessages.map((msg, i) => (
+                    <div key={i} className="mb-3">
+                      <div className="text-xs text-zinc-500">{msg.role}</div>
+                      <div className="whitespace-pre-wrap text-white">{msg.content}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-3">
+                  <input
+                    value={aiInput}
+                    onChange={(e) => setAiInput(e.target.value)}
+                    placeholder="Typ je prompt..."
+                    className="flex-1 rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"
+                  />
+
+                  <button onClick={sendPrompt} className="rounded-xl border border-cyan-500 px-4 py-3">
+                    Send
+                  </button>
+                </div>
+              </div>
+
+              <div className="min-w-full">
+                <section className="rounded-[2rem] border border-zinc-800 bg-black p-1">
+                  <div className="mb-6 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-2xl font-semibold">Dual Terminal v1</h3>
+                      <p className="mt-1 text-sm text-zinc-400">
+                        Links PowerShell, rechts Linux via SSH.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 xl:grid-cols-2">
+                    <TerminalPane title="PowerShell" wsType="powershell" />
+                    <TerminalPane title="Linux SSH" wsType="linux" />
+                  </div>
+                </section>
+              </div>
+
+              <div className="min-w-full">
+                <section className="rounded-[2rem] border border-zinc-800 bg-zinc-950/80 p-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-2xl font-semibold">Live System Logs</h3>
+                    <span className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                      Monitor
+                    </span>
+                  </div>
+
+                  <div className="max-h-72 space-y-2 overflow-auto rounded-2xl border border-zinc-800 bg-black p-4 font-mono text-sm">
+                    {logs.map((log, index) => (
+                      <div key={index} className="text-zinc-300">
+                        {colorizeLog(log)}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </div>
           </div>
         </section>
-        </AccordionSection>
       </div>
     </div>
   )
@@ -1009,7 +1183,7 @@ function TerminalPane({ title, wsType }) {
     fitAddon.fit()
 
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const ws = new WebSocket(`${protocol}://0.0.0.0:3001/ws/terminal?type=${wsType}`)
+    const ws = new WebSocket(`${protocol}://localhost:3001/ws/terminal?type=${wsType}`)
 
     ws.onopen = () => {
       term.writeln(`\x1b[32m[connected]\x1b[0m ${title}`)

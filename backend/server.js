@@ -1,4 +1,4 @@
-require('dotenv').config()
+require('dotenv').config({ path: require('path').join(__dirname, '.env') })
 
 const express = require('express')
 const cors = require('cors')
@@ -10,7 +10,7 @@ const pty = require('node-pty')
 const { Client } = require('ssh2')
 
 const app = express()
-const PORT = 3001
+const PORT = Number(process.env.PORT || 3001)
 
 app.use(cors())
 app.use(express.json())
@@ -18,21 +18,52 @@ app.use(express.json())
 const NODES = [
   {
     name: 'Victus',
-    ip: '127.0.0.1',
+    ip: '100.101.9.116',
     role: 'AI Brain',
     canRestart: false,
+    guiUrl: null,
   },
   {
     name: 'Proxmox',
-    ip: '192.168.0.50',
+    ip: '100.67.65.85',
     role: 'Hypervisor',
     canRestart: false,
+    guiUrl: 'https://100.67.65.85:8006/',
   },
   {
-    name: 'Ubuntu/OpenClaw',
-    ip: process.env.LINUX_SSH_HOST || '192.168.0.161',
-    role: 'Gateway',
+    name: 'Lucifershell',
+    ip: process.env.LINUX_SSH_HOST || '192.168.0.222',
+    role: 'Gateway / SSH',
     canRestart: false,
+    guiUrl: null,
+  },
+  {
+    name: 'OpenClaw',
+    ip: '100.113.225.117',
+    role: 'AI Agent (on Lucifershell)',
+    canRestart: false,
+    guiUrl: 'http://100.113.225.117:18789/',
+  },
+  {
+    name: 'Kali-Linux',
+    ip: '100.65.228.59',
+    role: 'Security / Pentest',
+    canRestart: false,
+    guiUrl: null,
+  },
+  {
+    name: 'iPhone-15-Pro',
+    ip: '100.84.216.86',
+    role: 'Mobile',
+    canRestart: false,
+    guiUrl: null,
+  },
+  {
+    name: 'Pad-i14-Pro',
+    ip: '100.127.210.66',
+    role: 'Tablet',
+    canRestart: false,
+    guiUrl: null,
   },
 ]
 
@@ -55,8 +86,9 @@ function execCommand(command, options = {}) {
 }
 
 function ping(ip) {
+  const flag = process.platform === 'win32' ? '-n' : '-c'
   return new Promise((resolve) => {
-    exec(`ping -n 1 ${ip}`, (error) => {
+    exec(`ping ${flag} 1 ${ip}`, (error) => {
       resolve(!error)
     })
   })
@@ -494,22 +526,23 @@ app.get('/api/openclaw/system-info', async (req, res) => {
 
 app.get('/api/openclaw/ollama', async (req, res) => {
   try {
-    const openclawIP = process.env.LINUX_SSH_HOST || '192.168.0.161'
+    const openclawIP = process.env.LINUX_SSH_HOST || '192.168.0.222'
     let models = []
-    let usedLocal = false
+    let source = 'remote'
 
+    // Probeer eerst direct HTTP (werkt remote via Tailscale als Ollama op 0.0.0.0 bindt)
     try {
       const response = await axios.get(`http://${openclawIP}:11434/api/tags`, {
         timeout: 3000,
       })
       models = response.data.models || []
-    } catch (remoteError) {
-      console.warn('[OPENCLAW] hard fallback to SSH curl (remote failed):', remoteError.message)
+    } catch {
+      // Stille fallback — direct HTTP faalt als Ollama op localhost bindt
     }
 
+    // Fallback: via SSH curl (werkt altijd zolang SSH bereikbaar is)
     if (!models || models.length === 0) {
-      // fallback: query localhost on Gateway via SSH (same as curl localhost)
-      usedLocal = true
+      source = 'ssh-local'
       const localJson = await executeSSHCommand('curl -s http://127.0.0.1:11434/api/tags')
       try {
         const parsed = JSON.parse(localJson.stdout)
@@ -526,7 +559,7 @@ app.get('/api/openclaw/ollama', async (req, res) => {
       modelsCount: models.length,
       models,
       modelNames: models.map((m) => m.name),
-      source: usedLocal ? 'ssh-local' : 'remote',
+      source,
     })
   } catch (error) {
     res.status(503).json({
@@ -589,11 +622,26 @@ app.post('/api/openclaw/execute', async (req, res) => {
       /^free/,
       /^df/,
       /^ps/,
-      /^systemctl\s+status/,
-      /^docker\s+(ps|stats)/,
+      /^systemctl\s+(--user\s+)?(status|start|stop|restart|enable|disable)/,
+      /^docker\s+(ps|stats|start|stop|restart|exec|inspect|logs)/,
+      /^cat\s/,
+      /^find\s/,
+      /^grep\s/,
+      /^sed\s/,
       /^curl/,
       /^ping/,
       /^ollama/,
+      /^openclaw/,
+      /^ss\s/,
+      /^nano\s/,
+      /^echo\s/,
+      /^mkdir\s/,
+      /^cp\s/,
+      /^mv\s/,
+      /^chmod\s/,
+      /^head\s/,
+      /^tail\s/,
+      /^wc\s/,
     ]
 
     const isAllowed = allowedPatterns.some((pattern) => pattern.test(command))
@@ -601,7 +649,7 @@ app.post('/api/openclaw/execute', async (req, res) => {
     if (!isAllowed) {
       return res.status(403).json({
         ok: false,
-        error: `Command niet toegestaan. Allowed: ls, pwd, whoami, uptime, free, df, ps, systemctl status, docker ps, ollama, curl, ping`,
+        error: `Command niet toegestaan. Allowed: ls, pwd, whoami, uptime, free, df, ps, systemctl (status/start/stop/restart), docker, cat, find, grep, sed, curl, ping, ollama, openclaw, ss, echo, mkdir, cp, mv, chmod, head, tail, wc`,
       })
     }
 
@@ -910,6 +958,14 @@ wss.on('connection', (ws, req) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🔥 Cluster backend + terminal draait op http://0.0.0.0:${PORT}`)
 })
+
+server.on('error', (err) => {
+  console.error('[SERVER] Fout bij starten van de backend:', err.message)
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[SERVER] Poort ${PORT} is al in gebruik. Gebruik een andere PORT in .env of stop het proces dat deze poort bezet.`)
+  }
+})
+
 app.post('/api/ollama/generate', async (req, res) => {
   try {
     const { prompt } = req.body || {}
