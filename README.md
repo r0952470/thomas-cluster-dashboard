@@ -1,16 +1,107 @@
-# React + Vite
+# ⚡ Thomas Cluster Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> Local AI Cluster Command Center for managing Ollama, OpenClaw, and multi-node infrastructure.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🧠 Overview
 
-## React Compiler
+Thomas Cluster Dashboard is a **local control panel** designed to monitor, manage, and interact with multiple systems:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- 🖥️ AI Node (Ollama - HP Victus)
+- 🧩 Gateway Node (Lucifershell - OpenClaw)
+- 🐉 Kali Node (Pentest / Terminal)
+- 🧱 Proxmox (Virtualization Layer)
 
-## Expanding the ESLint configuration
+This is not just a dashboard — it's a **mission control interface** for your personal infrastructure.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+---
+
+## 🔥 Features
+
+- 📡 Cluster status monitoring
+- 🤖 Ollama model management (local AI)
+- 🧠 AI console (chat with models)
+- 🖥️ Multi-node visibility
+- 🐉 Kali Linux terminal integration
+- 🔌 OpenClaw gateway control
+- 📊 Real-time system interaction
+- ⚡ Command execution via terminal
+
+---
+
+## 🏗️ Architecture
+
+Frontend (React + Vite)
+↓
+Backend (Node.js / Express)
+↓
+Nodes:
+
+Victus (AI / Ollama)
+Lucifershell (Gateway / OpenClaw)
+Kali (Terminal / Ops)
+Proxmox (Infra)
+
+---
+
+## 🚀 Getting Started
+
+### 1. Clone repository
+
+```bash
+git clone https://github.com/r0952470/thomas-cluster-dashboard.git
+cd thomas-cluster-dashboard
+2. Install dependencies
+npm install
+cd backend
+npm install
+cd ..
+3. Start application
+npm run start
+
+Of apart:
+
+npm run dev
+npm run dev:backend
+4. Open dashboard
+http://localhost:5173
+⚙️ Configuration
+
+Maak een .env file in root:
+
+VITE_API_BASE_URL=http://localhost:3001
+
+Backend (optioneel):
+
+LINUX_SSH_HOST=192.168.0.161
+OPENCLAW_HOST=127.0.0.1
+🐉 Kali Integration
+
+Run commands rechtstreeks vanuit dashboard:
+
+Network scanning (nmap)
+Web scanning (nikto, gobuster)
+Exploitation tools
+Custom scripts
+⚠️ Notes
+Dit project is bedoeld voor lokaal gebruik
+Zet je backend niet open naar internet zonder beveiliging
+Vereist een werkende Ollama instance op poort 11434
+🔐 Security Reminder
+Nooit API keys in frontend zetten
+Gebruik .env voor secrets
+Ollama draait lokaal (geen API key nodig)
+👤 Author
+
+Thomas Huybrechts
+Builder of local AI infrastructure and custom control systems.
+
+⚡ Philosophy
+
+"Control your tools. Control your data. Control your system."
+
+
+---
+
+```
