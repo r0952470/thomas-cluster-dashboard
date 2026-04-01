@@ -166,16 +166,3 @@ Thomas
 
 Control your tools. Control your data. Control your system.
 
-
-
-
-
-
----
-
-# 🚀 Volgende stap (aanrader)
-
-Als je dit echt wil levelen:
-
-- screenshots toevoegen  
-- korte GIF (das
