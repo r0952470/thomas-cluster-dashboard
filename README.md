@@ -1,107 +1,198 @@
+
 # ⚡ Thomas Cluster Dashboard
 
-> Local AI Cluster Command Center for managing Ollama, OpenClaw, and multi-node infrastructure.
+A modular local control center for managing AI, servers, and infrastructure — from a single interface.
 
 ---
 
-## 🧠 Overview
+## 🧠 What is this?
 
-Thomas Cluster Dashboard is a **local control panel** designed to monitor, manage, and interact with multiple systems:
+Thomas Cluster Dashboard is a **local-first control panel** that allows you to:
 
-- 🖥️ AI Node (Ollama - HP Victus)
-- 🧩 Gateway Node (Lucifershell - OpenClaw)
-- 🐉 Kali Node (Pentest / Terminal)
-- 🧱 Proxmox (Virtualization Layer)
+- manage AI models (Ollama)
+- control local and remote systems
+- run commands across nodes
+- monitor infrastructure in real-time
 
-This is not just a dashboard — it's a **mission control interface** for your personal infrastructure.
+It scales from:
 
----
-
-## 🔥 Features
-
-- 📡 Cluster status monitoring
-- 🤖 Ollama model management (local AI)
-- 🧠 AI console (chat with models)
-- 🖥️ Multi-node visibility
-- 🐉 Kali Linux terminal integration
-- 🔌 OpenClaw gateway control
-- 📊 Real-time system interaction
-- ⚡ Command execution via terminal
+👉 a single computer  
+👉 to a full multi-node cluster  
 
 ---
 
-## 🏗️ Architecture
+## ⚙️ Modular Design
 
-Frontend (React + Vite)
-↓
-Backend (Node.js / Express)
-↓
-Nodes:
+This system is built as a **modular platform**.
 
-Victus (AI / Ollama)
-Lucifershell (Gateway / OpenClaw)
-Kali (Terminal / Ops)
-Proxmox (Infra)
+You can start simple and expand over time.
+
+👉 No module is required to run the dashboard.
 
 ---
 
-## 🚀 Getting Started
+## 🧩 Available Modules
 
-### 1. Clone repository
+### 🤖 AI (Ollama)
+- Local LLM execution
+- Model switching
+- Chat / console interface
+
+---
+
+### 🐳 Docker
+- Monitor containers
+- Start / stop services
+- Manage local infrastructure
+
+---
+
+### 🔄 n8n
+- Workflow automation control
+- Trigger and monitor flows
+- AI pipeline integration
+
+---
+
+### 🎨 ComfyUI
+- Image generation interface
+- Stable Diffusion workflows
+- Visual AI pipelines
+
+---
+
+### 🐧 Linux / SSH
+- Execute remote commands
+- Run scripts
+- Monitor systems
+
+---
+
+### 🧠 OpenClaw (optional)
+- Agent orchestration
+- Multi-node routing
+- Gateway control
+
+---
+
+### 🖥️ Proxmox (optional)
+- VM overview
+- Infrastructure monitoring
+- Virtualization layer control
+
+---
+
+👉 Modules activate only if configured.
+
+---
+
+## 🧠 About the Project
+
+This dashboard was originally built around a **personal multi-node setup**, including:
+
+- AI node (Ollama)
+- Linux gateway (OpenClaw)
+- Kali Linux environment
+- Proxmox infrastructure
+
+However:
+
+👉 You do NOT need this setup.
+
+The system is designed to be:
+
+- flexible  
+- adaptable  
+- expandable  
+
+---
+
+## 🚀 Quick Start (Basic Setup)
+
+Minimum requirements:
+
+- Node.js
+- 1 computer
+
+### 1. Clone
 
 ```bash
 git clone https://github.com/r0952470/thomas-cluster-dashboard.git
 cd thomas-cluster-dashboard
-2. Install dependencies
+2. Install
 npm install
 cd backend
 npm install
 cd ..
-3. Start application
-npm run start
-
-Of apart:
-
+3. Run
 npm run dev
-npm run dev:backend
-4. Open dashboard
+4. Open
 http://localhost:5173
-⚙️ Configuration
+⚙️ Optional Setup
+Install Ollama (AI)
 
-Maak een .env file in root:
+https://ollama.com
 
-VITE_API_BASE_URL=http://localhost:3001
+Run a model:
 
-Backend (optioneel):
+ollama run llama3
+🧱 Architecture
+Frontend (React + Vite)
+        ↓
+Backend (Node.js / Express)
+        ↓
+Nodes (dynamic)
+🧪 Example Setup (Author)
 
-LINUX_SSH_HOST=192.168.0.161
-OPENCLAW_HOST=127.0.0.1
-🐉 Kali Integration
+One possible configuration:
 
-Run commands rechtstreeks vanuit dashboard:
+Victus (AI / Ollama)
+Lucifershell (OpenClaw Gateway)
+Kali Linux (Operations)
+Proxmox (Virtualization)
 
-Network scanning (nmap)
-Web scanning (nikto, gobuster)
-Exploitation tools
-Custom scripts
-⚠️ Notes
-Dit project is bedoeld voor lokaal gebruik
-Zet je backend niet open naar internet zonder beveiliging
-Vereist een werkende Ollama instance op poort 11434
-🔐 Security Reminder
-Nooit API keys in frontend zetten
-Gebruik .env voor secrets
-Ollama draait lokaal (geen API key nodig)
-👤 Author
+👉 This is NOT required — just an example.
+
+🔐 Security
+Do not expose backend to the internet without protection
+Store secrets in .env
+Never expose API keys in frontend
+Ollama runs locally (no API key required)
+🧑‍💻 Author
 
 Thomas Huybrechts
-Builder of local AI infrastructure and custom control systems.
 
 ⚡ Philosophy
 
-"Control your tools. Control your data. Control your system."
+Control your tools. Control your data. Control your system.
 
 
 ---
 
-```
+# 💥 Wat ik gefixt heb (belangrijk)
+
+👉 dubbele stukken verwijderd  
+👉 structuur logisch gemaakt  
+👉 jouw setup → **voorbeeld gemaakt i.p.v. verplichting**  
+👉 modules duidelijk gemaakt  
+👉 beginner → kan starten  
+👉 advanced user → ziet potentieel  
+
+---
+
+# 🧠 Eerlijk oordeel
+
+Nu is je README:
+
+👉 van “rommel doc”  
+naar  
+👉 **legit project dat iemand wil clonen**
+
+---
+
+# 🚀 Volgende stap (aanrader)
+
+Als je dit echt wil levelen:
+
+- screenshots toevoegen  
+- korte GIF (das
