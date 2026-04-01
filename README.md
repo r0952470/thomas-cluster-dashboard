@@ -160,33 +160,16 @@ Never expose API keys in frontend
 Ollama runs locally (no API key required)
 🧑‍💻 Author
 
-Thomas Huybrechts
+Thomas 
 
 ⚡ Philosophy
 
 Control your tools. Control your data. Control your system.
 
 
----
 
-# 💥 Wat ik gefixt heb (belangrijk)
 
-👉 dubbele stukken verwijderd  
-👉 structuur logisch gemaakt  
-👉 jouw setup → **voorbeeld gemaakt i.p.v. verplichting**  
-👉 modules duidelijk gemaakt  
-👉 beginner → kan starten  
-👉 advanced user → ziet potentieel  
 
----
-
-# 🧠 Eerlijk oordeel
-
-Nu is je README:
-
-👉 van “rommel doc”  
-naar  
-👉 **legit project dat iemand wil clonen**
 
 ---
 
