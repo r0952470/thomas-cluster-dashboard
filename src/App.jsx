@@ -3,6 +3,10 @@ import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
 import './xterm-custom.css'
+import DevComHQ from './DevComHQ'
+import DockerHQ from './DockerHQ'
+import N8nHQ from './N8nHQ'
+import ComfyHQ from './ComfyHQ'
 
 const flowSteps = [
   'Overlay netwerk controleren',
@@ -50,6 +54,7 @@ export default function App() {
     modelNames: [],
   })
   const [activeDashboard, setActiveDashboard] = useState(0)
+  const [activeView, setActiveView] = useState('cluster')
   const touchStartXRef = useRef(null)
   const touchStartYRef = useRef(null)
   const touchEndXRef = useRef(null)
@@ -124,7 +129,7 @@ export default function App() {
         addLog('[WAIT] Cluster status ophalen...')
       }
 
-      const response = await fetch('http://localhost:3001/api/cluster/status')
+      const response = await fetch('/api/cluster/status')
       const data = await response.json()
 
       if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
@@ -158,8 +163,8 @@ export default function App() {
       if (!silent) addLog('[WAIT] Ollama dashboard data ophalen...')
 
       const [modelsRes, currentRes] = await Promise.all([
-        fetch('http://localhost:3001/api/ollama/models'),
-        fetch('http://localhost:3001/api/ollama/current'),
+        fetch('/api/ollama/models'),
+        fetch('/api/ollama/current'),
       ])
 
       const modelsData = await modelsRes.json()
@@ -184,9 +189,9 @@ export default function App() {
       if (!silent) addLog('[WAIT] OpenClaw info ophalen...')
 
       const [statusRes, infoRes, ollamaRes] = await Promise.all([
-        fetch('http://localhost:3001/api/openclaw/status'),
-        fetch('http://localhost:3001/api/openclaw/system-info'),
-        fetch('http://localhost:3001/api/openclaw/ollama'),
+        fetch('/api/openclaw/status'),
+        fetch('/api/openclaw/system-info'),
+        fetch('/api/openclaw/ollama'),
       ])
 
       const statusData = await statusRes.json()
@@ -265,7 +270,7 @@ export default function App() {
       addLog(`[WAIT] Ping naar ${nodeName}...`)
 
       const response = await fetch(
-        `http://localhost:3001/api/nodes/${encodeURIComponent(nodeName)}/ping`,
+        `/api/nodes/${encodeURIComponent(nodeName)}/ping`,
         { method: 'POST' }
       )
       const data = await response.json()
@@ -309,7 +314,7 @@ export default function App() {
       addLog(`[WAIT] Restart aanvraag voor ${nodeName}...`)
 
       const response = await fetch(
-        `http://localhost:3001/api/nodes/${encodeURIComponent(nodeName)}/restart`,
+        `/api/nodes/${encodeURIComponent(nodeName)}/restart`,
         { method: 'POST' }
       )
       const data = await response.json()
@@ -330,7 +335,7 @@ export default function App() {
       setBusy(key, true)
       addLog('[WAIT] Ollama status controleren...')
 
-      const response = await fetch('http://localhost:3001/api/ollama/status')
+      const response = await fetch('/api/ollama/status')
       const data = await response.json()
 
       if (!response.ok) throw new Error(data.error || 'Ollama check mislukt')
@@ -350,7 +355,7 @@ export default function App() {
       setBusy(key, true)
       addLog('[WAIT] Ollama restart gestart...')
 
-      const response = await fetch('http://localhost:3001/api/ollama/restart', {
+      const response = await fetch('/api/ollama/restart', {
         method: 'POST',
       })
       const data = await response.json()
@@ -393,7 +398,7 @@ export default function App() {
       setBusy(key, true)
       addLog(`[WAIT] Default model instellen naar ${selectedModel}...`)
 
-      const response = await fetch('http://localhost:3001/api/ollama/current', {
+      const response = await fetch('/api/ollama/current', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: selectedModel }),
@@ -419,7 +424,7 @@ export default function App() {
       addLog(`[WAIT] ${service} herstarten op OpenClaw...`)
 
       const response = await fetch(
-        `http://localhost:3001/api/openclaw/services/${service}/restart`,
+        `/api/openclaw/services/${service}/restart`,
         { method: 'POST' }
       )
 
@@ -443,7 +448,7 @@ export default function App() {
       setBusy(key, true)
       addLog('[WAIT] Cluster reset gestart...')
 
-      const response = await fetch('http://localhost:3001/api/cluster/reset', {
+      const response = await fetch('/api/cluster/reset', {
         method: 'POST',
       })
 
@@ -469,7 +474,7 @@ export default function App() {
       setBusy(key, true)
       setOpenclawOutput(`▶ ${openclawCommand}\n⏳ Executing...\n`)
 
-      const response = await fetch('http://localhost:3001/api/openclaw/execute', {
+      const response = await fetch('/api/openclaw/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: openclawCommand }),
@@ -556,7 +561,7 @@ export default function App() {
   setAiMessages((prev) => [...prev, userMessage])
 
   try {
-    const response = await fetch('http://localhost:3001/api/ollama/generate', {
+    const response = await fetch('/api/ollama/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: aiInput }),
@@ -588,7 +593,15 @@ export default function App() {
     return 'text-zinc-200'
   }, [clusterState])
 
-  return (
+  return activeView === 'devcom' ? (
+    <DevComHQ onBack={() => setActiveView('cluster')} />
+  ) : activeView === 'docker' ? (
+    <DockerHQ onBack={() => setActiveView('cluster')} />
+  ) : activeView === 'n8n' ? (
+    <N8nHQ onBack={() => setActiveView('cluster')} />
+  ) : activeView === 'comfy' ? (
+    <ComfyHQ onBack={() => setActiveView('cluster')} />
+  ) : (
     <div className="min-h-screen bg-black px-6 py-8 text-white">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
@@ -622,10 +635,6 @@ export default function App() {
                 accent
               />
               <InfoCard
-                title="Dev Mode"
-                body="Cluster klaar voor experimenten, services uitbreidbaar, AI optioneel."
-              />
-              <InfoCard
                 title="Travel Mode"
                 body="Victus blijft primary, ook op verplaatsing, via overlay en reconnect logic."
               />
@@ -642,6 +651,33 @@ export default function App() {
                 <BigButton onClick={refreshAll} variant="cyan">
                   Refresh Status
                 </BigButton>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <button
+                  onClick={() => setActiveView('devcom')}
+                  className="flex-1 rounded-2xl border border-red-700 bg-red-950/20 px-6 py-5 text-left text-xl font-semibold text-white transition hover:scale-[1.02] hover:border-red-500 hover:bg-red-950/30 hover:shadow-lg hover:shadow-red-500/30"
+                >
+                  🔴 DevCom HQ
+                </button>
+                <button
+                  onClick={() => setActiveView('docker')}
+                  className="flex-1 rounded-2xl border border-blue-700 bg-blue-950/20 px-6 py-5 text-left text-xl font-semibold text-white transition hover:scale-[1.02] hover:border-blue-500 hover:bg-blue-950/30 hover:shadow-lg hover:shadow-blue-500/30"
+                >
+                  🐳 Docker HQ
+                </button>
+                <button
+                  onClick={() => setActiveView('n8n')}
+                  className="flex-1 rounded-2xl border border-orange-700 bg-orange-950/20 px-6 py-5 text-left text-xl font-semibold text-white transition hover:scale-[1.02] hover:border-orange-500 hover:bg-orange-950/30 hover:shadow-lg hover:shadow-orange-500/30"
+                >
+                  ⚡ n8n Automation
+                </button>
+                <button
+                  onClick={() => setActiveView('comfy')}
+                  className="flex-1 rounded-2xl border border-purple-700 bg-purple-950/20 px-6 py-5 text-left text-xl font-semibold text-white transition hover:scale-[1.02] hover:border-purple-500 hover:bg-purple-950/30 hover:shadow-lg hover:shadow-purple-500/30"
+                >
+                  🎨 ComfyUI Studio
+                </button>
               </div>
             </div>
           </section>
@@ -686,7 +722,7 @@ export default function App() {
         <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
           <StatCard
             title="Nodes"
-            value={`${nodesLive}/${nodes.length || 5} live`}
+            value={`${nodesLive}/${nodes.length || 6} live`}
             dotColor={nodesLive > 0 ? 'bg-emerald-500' : 'bg-red-500'}
           />
           <StatCard
@@ -799,6 +835,34 @@ export default function App() {
                       <div className="mt-2 text-xs uppercase tracking-[0.2em] text-zinc-500">
                         {node.ip}
                       </div>
+
+                      {node.services && node.services.length > 0 && (
+                        <div className="mt-4 space-y-1.5">
+                          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Services</div>
+                          {node.services.map((svc) => (
+                            <div
+                              key={svc.name}
+                              className="flex items-center justify-between rounded-lg border border-zinc-800 bg-black px-3 py-2"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="h-2 w-2 rounded-full bg-cyan-500 animate-pulse" />
+                                <span className="text-sm font-medium">{svc.name}</span>
+                                {svc.port && (
+                                  <span className="text-xs text-zinc-500">:{svc.port}</span>
+                                )}
+                              </div>
+                              {svc.guiUrl && (
+                                <button
+                                  onClick={() => window.open(svc.guiUrl, '_blank', 'noopener,noreferrer')}
+                                  className="text-xs text-cyan-400 hover:text-cyan-300"
+                                >
+                                  Open
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="mt-5 grid grid-cols-2 gap-3">
                         <ActionButton
@@ -953,7 +1017,7 @@ export default function App() {
                       onClick={async () => {
                         setBusy('launch-openclaw', true)
                         try {
-                          const res = await fetch('http://localhost:3001/api/openclaw/execute', {
+                          const res = await fetch('/api/openclaw/execute', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ command: 'ollama launch openclaw' }),
@@ -970,9 +1034,14 @@ export default function App() {
                     />
                     <ActionButton
                       label="Open WebUI"
-                      onClick={() => {
-                        const oc = nodes.find(n => n.name === 'OpenClaw')
-                        window.open(oc?.guiUrl || 'http://100.113.225.117:18789/', '_blank', 'noopener,noreferrer')
+                      onClick={async () => {
+                        try {
+                          const resp = await fetch('/api/openclaw/dashboard-url')
+                          const data = await resp.json()
+                          window.open(data.url || 'https://lucifershell.tail5e2072.ts.net/', '_blank', 'noopener,noreferrer')
+                        } catch {
+                          window.open('https://lucifershell.tail5e2072.ts.net/', '_blank', 'noopener,noreferrer')
+                        }
                       }}
                     />
                     <ActionButton
@@ -1095,14 +1164,21 @@ export default function App() {
                 </div>
 
                 <div className="flex gap-3">
-                  <input
+                  <textarea
                     value={aiInput}
                     onChange={(e) => setAiInput(e.target.value)}
-                    placeholder="Typ je prompt..."
-                    className="flex-1 rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        sendPrompt()
+                      }
+                    }}
+                    placeholder="Typ je prompt... (Enter = verstuur, Shift+Enter = nieuwe regel)"
+                    rows={1}
+                    className="flex-1 resize-none rounded-xl border border-zinc-700 bg-black px-4 py-3 text-white"
                   />
 
-                  <button onClick={sendPrompt} className="rounded-xl border border-cyan-500 px-4 py-3">
+                  <button onClick={sendPrompt} className="self-end rounded-xl border border-cyan-500 px-4 py-3">
                     Send
                   </button>
                 </div>
@@ -1183,7 +1259,7 @@ function TerminalPane({ title, wsType }) {
     fitAddon.fit()
 
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const ws = new WebSocket(`${protocol}://localhost:3001/ws/terminal?type=${wsType}`)
+    const ws = new WebSocket(`${protocol}://${window.location.host}/ws/terminal?type=${wsType}`)
 
     ws.onopen = () => {
       term.writeln(`\x1b[32m[connected]\x1b[0m ${title}`)
@@ -1280,11 +1356,13 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function InfoCard({ title, body, accent = false }) {
+function InfoCard({ title, body, accent = false, accentRed = false }) {
   return (
     <div
       className={`rounded-3xl p-5 ${
-        accent
+        accentRed
+          ? 'border border-red-700/60 bg-red-950/20 shadow-lg shadow-red-950/20'
+          : accent
           ? 'border border-cyan-700/60 bg-cyan-950/30 shadow-lg shadow-cyan-950/20'
           : 'border border-zinc-800 bg-zinc-950/80'
       }`}
