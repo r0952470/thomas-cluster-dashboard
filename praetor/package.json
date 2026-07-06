@@ -1,0 +1,12 @@
+{
+  "name": "praetor-poc",
+  "private": true,
+  "version": "0.1.0",
+  "type": "commonjs",
+  "description": "PRAETOR proof-of-concept: governed cognitive memory lifecycle, persistent planning, epistemic typing (concept paper v0.3, Section 8)",
+  "scripts": {
+    "demo1": "node demos/demo1-memory.js",
+    "demo2": "node demos/demo2-plan.js",
+    "test": "node --test test/praetor.test.js"
+  }
+}
